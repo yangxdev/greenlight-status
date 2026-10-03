@@ -4,6 +4,7 @@ import type { HealthResponse } from '../shared/api.ts';
 import type { Env } from './env.ts';
 import worker from './index.ts';
 import { createRouter } from './router.ts';
+import { resetStatusCache } from './status/cache.ts';
 
 const ctx = {
   waitUntil: () => {},
@@ -27,6 +28,17 @@ describe('worker', () => {
     expect(res.headers.get('cache-control')).toBe('no-store');
     const body = (await res.json()) as HealthResponse;
     expect(body).toMatchObject({ ok: true, storage: false, database: false });
+  });
+
+  it('GET /api/status answers 503 JSON with no-store when GitHub is down', async () => {
+    resetStatusCache();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('x', { status: 500 }));
+    const res = await call('/api/status');
+    expect(res.status).toBe(503);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(await res.json()).toMatchObject({ error: expect.any(String) });
+    spy.mockRestore();
   });
 
   it('answers unknown API paths with JSON 404, never the SPA shell', async () => {
