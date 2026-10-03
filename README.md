@@ -6,7 +6,7 @@
 
 # greenlight-status
 
-[One sentence: what it does, for whom. The same as SITE_DESCRIPTION in src/app/site.ts.]
+A read-only page showing what the Greenlight pipeline is working on, which ideas it scored and rejected, and which products are live.
 
 <!-- greenlight:live -->
 <!-- /greenlight:live -->
@@ -16,22 +16,27 @@
 
 ## What it does
 
-- [3 to 5 bullets from the visitor's side: what they can do with it, not how it is built.]
+- Shows one count per pipeline state: idea, approved, blueprint-ready, blueprint-ok, building, live, stuck and archived.
+- Summarises the newest Ideas run: its date, how many cards were scored, filed and rejected.
+- Lists the products that are live, with the latest verdict and the reason for it.
+- Lists every card the Critic scored, newest run first, with four scores, the total and the verdict, then the watchlist of near misses.
+- Links every row to its source file on GitHub.
 
 ## How to use it
 
-1. [The core flow in 2 to 4 numbered steps, in the words the page itself uses.]
+1. Open the **overview** page to see the pipeline counts, the latest run and the live products.
+2. Open **ideas** to read every scored card and the watchlist.
+3. Follow a row's link to read the source file on GitHub.
+
+Only the 100 newest issues are read, and only the first 100 comments of each live issue, so older ideas are not shown.
 
 ## Privacy
 
-[What it stores and where, plainly: "Nothing leaves your browser; your ticks live in localStorage", or which data the
-server keeps and for how long. No accounts, no tracking cookies; page views are counted by Cloudflare Web Analytics,
-which sets no cookies.]
+It stores nothing. The Worker reads public GitHub data and caches it in memory for ten minutes. There are no accounts and no tracking cookies; the only thing the browser remembers is your light or dark theme choice. Page views are counted by Cloudflare Web Analytics, which sets no cookies.
 
 ## Contributing
 
-[How a visitor can help: open an issue for a mistake or an idea, and, if the product has a data file people can
-extend, which file to edit in a pull request and what a good entry looks like.]
+Open an issue if a number looks wrong, a page is confusing, or you want something added. Pull requests are welcome too.
 
 ## Run it locally
 
@@ -45,9 +50,14 @@ npm run check   # lint, tests and a production build
 
 `npm run build && npx wrangler dev` serves the built app together with the `/api` Worker.
 
+Two settings control where the Worker reads from:
+
+- `SOURCE_REPO` is a plain variable in `wrangler.jsonc`. It defaults to `yangxdev/greenlight`.
+- `GITHUB_READ_TOKEN` is an optional read-only GitHub token for public repositories. Without it GitHub's limit of 60 requests an hour per IP applies. Set it with `npx wrangler secret put GITHUB_READ_TOKEN`, or put it in `.dev.vars` locally.
+
 ## Built with
 
-React 19, Vite, Redux Toolkit and Tailwind CSS v4, served by a Cloudflare Worker.
+React 19, Vite, Redux Toolkit, React Router and Tailwind CSS v4, served by a Cloudflare Worker.
 
 ---
 
