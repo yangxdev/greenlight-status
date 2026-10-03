@@ -4,6 +4,7 @@ import { useAppDispatch, useAppSelector } from './app/hooks.ts';
 import { DEFAULT_SOURCE_REPO, SITE_REPO } from './app/site.ts';
 import { SiteFooter, SiteHeader } from './components/shell/index.ts';
 import { Note } from './components/ui/index.ts';
+import Ideas from './features/status/Ideas.tsx';
 import Overview from './features/status/Overview.tsx';
 import { fetchStatus, selectStatus } from './features/status/statusSlice.ts';
 
@@ -48,6 +49,7 @@ export default function App() {
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Overview />} />
+          <Route path="ideas" element={<Ideas />} />
           <Route path="*" element={<Overview />} />
         </Route>
       </Routes>
