@@ -1,15 +1,16 @@
 /**
- * The product's identity, from the blueprint's "Identity" section. The Architect replaces the name when it
- * scaffolds the repo (lowercase, like a wordmark); the Factory sets the tag in its first UI task.
+ * The product's identity, from the blueprint's "Identity" section: the lowercase name is the wordmark, the tag
+ * sits next to it in mono, and the description is the page's description and link-preview text.
  */
 export const SITE_NAME = 'greenlight-status';
 
-/** The mono tag next to the name: 2–4 lowercase words saying what it is, e.g. "privacy switch log". */
-export const SITE_TAG = 'new product';
+export const SITE_TAG = 'greenlight pipeline log';
 
-/**
- * One plain sentence: what it does, for whom. The build puts it in the page's description and link-preview tags,
- * so it is what people see when the link is shared or found in search.
- */
 export const SITE_DESCRIPTION =
-  'A small web tool, scaffolded by Greenlight and waiting for its blueprint.';
+  'A read-only page showing what the Greenlight pipeline is working on, which ideas it scored and rejected, and which products are live.';
+
+/** The repo this product's source lives in. */
+export const SITE_REPO = 'yangxdev/greenlight-status';
+
+/** The pipeline repo shown when the status document has not loaded yet (the Worker's default SOURCE_REPO). */
+export const DEFAULT_SOURCE_REPO = 'yangxdev/greenlight';
