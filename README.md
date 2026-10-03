@@ -9,9 +9,19 @@
 A read-only page showing what the Greenlight pipeline is working on, which ideas it scored and rejected, and which products are live.
 
 <!-- greenlight:live -->
+**[Open greenlight-status → greenlight-status.yangxdev.workers.dev](https://greenlight-status.yangxdev.workers.dev)**
 <!-- /greenlight:live -->
 
 <!-- greenlight:screenshots -->
+<img alt="greenlight-status, first screen on a desktop browser" src="docs/screenshots/desktop-light.png">
+
+<img alt="greenlight-status, the main view" src="docs/screenshots/section-light.png">
+
+<p align="center">
+<img alt="greenlight-status on a phone" src="docs/screenshots/mobile-light.png" width="320">
+</p>
+
+<sub>Screenshots of the live site, refreshed on every deploy.</sub>
 <!-- /greenlight:screenshots -->
 
 ## What it does
