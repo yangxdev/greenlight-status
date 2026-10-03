@@ -1,9 +1,13 @@
 import type { Env } from './env.ts';
 import { createRouter, type Route } from './router.ts';
 import { health } from './routes/health.ts';
+import { status } from './routes/status.ts';
 
 /** Every API route. Add new ones here; handlers live in worker/routes/. */
-export const routes: Route[] = [{ method: 'GET', pattern: '/api/health', handler: health }];
+export const routes: Route[] = [
+  { method: 'GET', pattern: '/api/health', handler: health },
+  { method: 'GET', pattern: '/api/status', handler: status },
+];
 
 const api = createRouter(routes);
 

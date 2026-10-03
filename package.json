@@ -26,7 +26,8 @@
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-icons": "^5.7.0",
-    "react-redux": "^9.3.0"
+    "react-redux": "^9.3.0",
+    "react-router": "^8.4.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260929.1",

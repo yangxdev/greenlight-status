@@ -1,85 +1,58 @@
-import { Accent, Hero, Section, SiteFooter, SiteHeader } from './components/shell/index.ts';
-import { buttonClass, Cell, CellGrid, DetailList, Note } from './components/ui/index.ts';
-import { HealthBadge } from './features/health/HealthBadge.tsx';
+import { useEffect } from 'react';
+import { BrowserRouter, Outlet, Route, Routes, useLocation } from 'react-router';
+import { useAppDispatch, useAppSelector } from './app/hooks.ts';
+import { DEFAULT_SOURCE_REPO, SITE_REPO } from './app/site.ts';
+import { SiteFooter, SiteHeader } from './components/shell/index.ts';
+import { Note } from './components/ui/index.ts';
+import Ideas from './features/status/Ideas.tsx';
+import Overview from './features/status/Overview.tsx';
+import { fetchStatus, selectStatus } from './features/status/statusSlice.ts';
 
-/**
- * The scaffold page. It shows the house anatomy (header, hero, numbered sections, footer) so the Factory starts
- * from the right structure; it replaces the content by implementing blueprint.md, not the structure.
- */
-export default function App() {
+const NAV = [
+  { href: '/', label: 'overview' },
+  { href: '/ideas', label: 'ideas' },
+];
+
+/** Header, footer and the one status fetch, shared by both screens. */
+function Layout() {
+  const dispatch = useAppDispatch();
+  const { pathname } = useLocation();
+  const { data } = useAppSelector(selectStatus);
+  const sourceRepo = data?.sourceRepo ?? DEFAULT_SOURCE_REPO;
+
+  useEffect(() => {
+    void dispatch(fetchStatus());
+  }, [dispatch]);
+
   return (
     <div className="min-h-dvh">
-      <SiteHeader
-        nav={[
-          { href: '#how', label: 'How it works' },
-          { href: '#status', label: 'Status' },
-        ]}
-      />
-
+      <SiteHeader nav={NAV} current={pathname === '/ideas' ? '/ideas' : '/'} />
       <main>
-        <Hero
-          eyebrow={<HealthBadge />}
-          title={
-            <>
-              Scaffolded and <Accent>waiting</Accent> for its blueprint.
-            </>
-          }
-          lede="The Factory replaces this page by implementing blueprint.md, keeping the header, the numbered sections and the footer."
-          actions={
-            <>
-              <a href="#how" className={buttonClass('primary')}>
-                See the structure
-              </a>
-              <a href="#status" className={buttonClass('ghost')}>
-                Check the API
-              </a>
-            </>
-          }
-          footnote={
-            <Note>Nothing here is stored. This page exists only until the first build.</Note>
-          }
-        />
-
-        <Section id="how" index="01" label="Structure" title="One page, ruled like a document">
-          <CellGrid>
-            <Cell index="01" title="A rail per section">
-              Every section carries its number and name on the left, with the content a third of the
-              way in.
-            </Cell>
-            <Cell index="02" title="Hairlines, not cards">
-              Rows are separated by rules, cells share their borders, corners are square.
-            </Cell>
-            <Cell index="03" title="One accent">
-              Vermilion marks the indices, the product mark and one word in the headline. Buttons
-              are ink.
-            </Cell>
-          </CellGrid>
-        </Section>
-
-        <Section
-          id="status"
-          index="02"
-          label="Status"
-          tone="zone"
-          title="What the scaffold ships with"
-        >
-          <DetailList
-            onZone
-            items={[
-              {
-                label: 'Health check',
-                value: "GET /api/health, the Publisher's smoke test. Keep it.",
-              },
-              { label: 'Server', value: 'Cloudflare Worker · R2 · MongoDB Atlas' },
-              { label: 'Front end', value: 'React 19 · Vite · Redux Toolkit · Tailwind v4' },
-            ]}
-          />
-        </Section>
+        <Outlet />
       </main>
-
-      <SiteFooter>
-        <Note>Built by Greenlight from a public idea. Corrections welcome.</Note>
+      <SiteFooter
+        links={[
+          { href: `https://github.com/${SITE_REPO}`, label: 'source' },
+          { href: `https://github.com/${sourceRepo}`, label: 'greenlight' },
+          { href: `https://github.com/${sourceRepo}#readme`, label: 'readme' },
+        ]}
+      >
+        <Note>This page is read from GitHub and cached for ten minutes. Nothing is stored.</Note>
       </SiteFooter>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route index element={<Overview />} />
+          <Route path="ideas" element={<Ideas />} />
+          <Route path="*" element={<Overview />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   );
 }

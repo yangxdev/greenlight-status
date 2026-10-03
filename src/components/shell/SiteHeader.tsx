@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import { SITE_NAME, SITE_TAG } from '../../app/site.ts';
 import { cn } from '../../lib/cn.ts';
 import { Mark } from '../ui/Mark.tsx';
@@ -10,7 +11,7 @@ export interface NavItem {
 }
 
 interface SiteHeaderProps {
-  /** In-page anchors or the product's other screens (max 3). Omit for a one-screen product. */
+  /** The product's screens, as router paths (max 3). Omit for a one-screen product. */
   nav?: readonly NavItem[];
   /** The `href` of the nav item for the current screen or section; it takes the accent. */
   current?: string;
@@ -24,7 +25,7 @@ export function SiteHeader({ nav = [], current }: SiteHeaderProps) {
   return (
     <header className="sticky top-0 z-40 h-header border-b border-line bg-canvas px-gutter">
       <div className={cn(containerClass, 'flex h-full items-center justify-between gap-6')}>
-        <a href="/" className="flex min-w-0 items-center gap-2.5">
+        <Link to="/" className="flex min-w-0 items-center gap-2.5">
           <Mark />
           <span className="text-[1.0625rem] font-semibold tracking-tight text-ink">
             {SITE_NAME}
@@ -32,14 +33,14 @@ export function SiteHeader({ nav = [], current }: SiteHeaderProps) {
           <span className="hidden truncate font-mono text-[0.75rem] text-muted sm:block">
             {SITE_TAG}
           </span>
-        </a>
-        <div className="flex items-center gap-6">
+        </Link>
+        <div className="flex items-center gap-4 md:gap-6">
           {nav.length > 0 ? (
-            <nav aria-label="Main" className="hidden items-center gap-6 md:flex">
+            <nav aria-label="Main" className="flex items-center gap-4 md:gap-6">
               {nav.map((item) => (
-                <a
+                <Link
                   key={item.href}
-                  href={item.href}
+                  to={item.href}
                   aria-current={item.href === current ? 'page' : undefined}
                   className={cn(
                     'font-mono text-[0.8125rem] transition-colors duration-(--duration-hover) ease-out-soft',
@@ -47,7 +48,7 @@ export function SiteHeader({ nav = [], current }: SiteHeaderProps) {
                   )}
                 >
                   {item.label}
-                </a>
+                </Link>
               ))}
             </nav>
           ) : null}
