@@ -1,8 +1,9 @@
 import { combineSlices, configureStore } from '@reduxjs/toolkit';
 import { healthSlice } from '../features/health/healthSlice.ts';
+import { statusSlice } from '../features/status/statusSlice.ts';
 
 // Add every new slice here; combineSlices infers RootState from them.
-export const rootReducer = combineSlices(healthSlice);
+export const rootReducer = combineSlices(healthSlice, statusSlice);
 
 export type RootState = ReturnType<typeof rootReducer>;
 
