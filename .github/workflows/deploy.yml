@@ -1,0 +1,326 @@
+# Publisher: every push to main (normally the Inspector's merge) is deployed as a Cloudflare Worker with
+# static assets (wrangler.jsonc), then smoke-tested and reported to the greenlight issue. No AI.
+#
+#   gate    (PAT)                 skip until the product has actually been built (issue state), or
+#                                 when the Cloudflare secrets are missing
+#   build   (no secrets)          npm ci + vite build, dist/ uploaded as an artifact
+#   deploy  (Cloudflare token)    never runs repository code: `npm ci --ignore-scripts` (so wrangler can bundle
+#                                 the Worker's dependencies) + a pinned wrangler installed outside the repo
+#   report  (PAT)                 comments the live URL and labels "live", or "stuck" on failure
+#   screenshots (no secrets)      the runner's Chrome photographs the live site (light theme, desktop/phone)
+#   readme  (PAT)                 sets the repo's About (website, description) and refreshes the README's live link
+#                                 and screenshots, committed with [skip ci] so it doesn't deploy again
+name: Publisher
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  GREENLIGHT_REPO: ${{ vars.GREENLIGHT_REPO }}
+  GREENLIGHT_ISSUE: ${{ vars.GREENLIGHT_ISSUE }}
+  WRANGLER_VERSION: 4.144.0
+  PLAYWRIGHT_VERSION: 1.63.0
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      deploy: ${{ steps.gate.outputs.deploy }}
+      state: ${{ steps.gate.outputs.state }}
+    steps:
+      - name: Decide whether to deploy
+        id: gate
+        env:
+          GH_TOKEN: ${{ secrets.GREENLIGHT_TOKEN }}
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          state=""
+          if [ -n "$GH_TOKEN" ] && [ -n "$GREENLIGHT_REPO" ] && [ -n "$GREENLIGHT_ISSUE" ]; then
+            state=$(gh issue view "$GREENLIGHT_ISSUE" --repo "$GREENLIGHT_REPO" --json labels \
+              --jq '[.labels[].name | select(IN("idea","approved","blueprint-ready","blueprint-ok","building","live","stuck","archived"))] | join(",")')
+          fi
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          deploy=true
+          if [ -z "$CF_TOKEN" ] || [ -z "$CF_ACCOUNT" ]; then
+            echo "::notice::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID not set in this repo, so skipping deploy"
+            deploy=false
+          elif [ "$GITHUB_EVENT_NAME" != "workflow_dispatch" ] && ! grep -qE '(^|,)(building|live|stuck)(,|$)' <<<"$state"; then
+            # Scaffold and blueprint commits land on main before anything is built.
+            echo "::notice::Greenlight issue state is '${state:-unknown}', so it isn't built yet and deploy is skipped (run this workflow by hand to force it)"
+            deploy=false
+          fi
+          echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: gate
+    if: needs.gate.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - run: npm ci
+      - name: Build
+        env:
+          # Cloudflare Web Analytics beacon token for this product (a public value, set as a repo variable).
+          VITE_CF_BEACON_TOKEN: ${{ vars.CF_BEACON_TOKEN }}
+        run: npm run build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 3
+
+  deploy:
+    needs: [gate, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Install Worker dependencies (no install scripts)
+        run: npm ci --ignore-scripts
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+
+      - name: Install wrangler (outside the repo)
+        run: npm install --prefix "$RUNNER_TEMP/wrangler" --no-audit --no-fund "wrangler@${WRANGLER_VERSION}"
+
+      - name: Deploy the Worker
+        id: deploy
+        run: |
+          wrangler="$RUNNER_TEMP/wrangler/node_modules/.bin/wrangler"
+          name=$(sed -nE 's/^[[:space:]]*"name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' wrangler.jsonc | head -n1)
+          [[ "$name" =~ ^[a-z0-9][a-z0-9-]{0,62}$ ]] || { echo "::error::invalid Worker name '$name' in wrangler.jsonc"; exit 1; }
+
+          # Reads wrangler.jsonc: bundles worker/index.ts (esbuild, no code runs) and uploads ./dist as the assets.
+          "$wrangler" deploy
+
+          # The public URL is https://<worker>.<account subdomain>.workers.dev.
+          account=$(curl -sS -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/subdomain" | jq -r '.result.subdomain // empty')
+          [ -n "$account" ] || { echo "::error::no workers.dev subdomain on this account (Workers & Pages → Settings → Subdomain)"; exit 1; }
+          echo "url=https://${name}.${account}.workers.dev" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          # A brand-new workers.dev hostname can take a minute or two to answer.
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 10 "$URL/api/health" | jq -e '.ok == true' >/dev/null \
+              && curl -fsS --max-time 10 -o /dev/null "$URL/"; then
+              echo "Smoke test passed on attempt $i: $URL"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::$URL/api/health did not return { ok: true } within 5 minutes"
+          exit 1
+
+  report:
+    needs: [gate, build, deploy]
+    if: always() && needs.gate.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Report to greenlight issue
+        env:
+          GH_TOKEN: ${{ secrets.GREENLIGHT_TOKEN }}
+          STATE: ${{ needs.gate.outputs.state }}
+          RESULT: ${{ needs.deploy.result }}
+          URL: ${{ needs.deploy.outputs.url }}
+        run: |
+          [ -n "$GH_TOKEN" ] && [ -n "$GREENLIGHT_REPO" ] && [ -n "$GREENLIGHT_ISSUE" ] || { echo "No greenlight issue to report to"; exit 0; }
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          if [ "$RESULT" = "success" ]; then
+            # Redeploys of an already-live product stay quiet, but clear the stuck a failed redeploy left.
+            if ! grep -qE '(^|,)live(,|$)' <<<"$STATE"; then
+              gh issue comment "$GREENLIGHT_ISSUE" --repo "$GREENLIGHT_REPO" \
+                --body "🚀 **Publisher:** live at ${URL} (smoke test passed on \`/api/health\`). Commit \`${GITHUB_SHA:0:7}\`, run: ${run_url}"$'\n\n'"<!-- greenlight:url=${URL} -->"
+              gh issue edit "$GREENLIGHT_ISSUE" --repo "$GREENLIGHT_REPO" --add-label live --remove-label building --remove-label stuck
+            elif grep -qE '(^|,)stuck(,|$)' <<<"$STATE"; then
+              gh issue edit "$GREENLIGHT_ISSUE" --repo "$GREENLIGHT_REPO" --remove-label stuck
+            fi
+          else
+            gh issue comment "$GREENLIGHT_ISSUE" --repo "$GREENLIGHT_REPO" \
+              --body "🚀 **Publisher:** deploy or smoke test failed. Run: ${run_url}"
+            gh issue edit "$GREENLIGHT_ISSUE" --repo "$GREENLIGHT_REPO" --add-label stuck --remove-label building
+            exit 1
+          fi
+
+  screenshots:
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      # playwright-core downloads no browser: the script drives the Google Chrome that GitHub's runners ship.
+      - name: Install playwright-core (outside the repo)
+        run: npm install --prefix "$RUNNER_TEMP/playwright" --no-audit --no-fund "playwright-core@${PLAYWRIGHT_VERSION}"
+
+      - name: Photograph the live site
+        env:
+          URL: ${{ needs.deploy.outputs.url }}
+          PLAYWRIGHT_DIR: ${{ runner.temp }}/playwright
+        run: node .github/scripts/screenshots.mjs "$URL" "$RUNNER_TEMP/screenshots"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: screenshots
+          path: ${{ runner.temp }}/screenshots/
+          if-no-files-found: error
+          retention-days: 3
+
+  readme:
+    needs: [deploy, screenshots]
+    # Screenshots are a nice-to-have: the About and the live link are updated even if they failed.
+    if: always() && needs.deploy.result == 'success' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GREENLIGHT_TOKEN }}
+      URL: ${{ needs.deploy.outputs.url }}
+    steps:
+      # This job runs no repository code (only git, gh, curl and inline Python), so it may hold the PAT.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          ref: main
+          fetch-depth: 20
+
+      - uses: actions/download-artifact@v8
+        if: needs.screenshots.result == 'success'
+        continue-on-error: true
+        with:
+          name: screenshots
+          path: ${{ runner.temp }}/screenshots
+
+      - name: Set the repo's website and description
+        run: |
+          [ -n "$GH_TOKEN" ] || { echo "::notice::No GREENLIGHT_TOKEN, so the About section is left alone"; exit 0; }
+          # The live page's own meta description (from SITE_DESCRIPTION), so the About line matches the site.
+          desc=$(curl -fsS --max-time 15 "$URL/" | python3 -c '
+          import html.parser, sys
+          class P(html.parser.HTMLParser):
+              found = ""
+              def handle_starttag(self, tag, attrs):
+                  a = dict(attrs)
+                  if tag == "meta" and a.get("name") == "description" and not self.found:
+                      self.found = " ".join((a.get("content") or "").split())[:300]
+          p = P(); p.feed(sys.stdin.read()); print(p.found)
+          ' || true)
+          args=(--homepage "$URL")
+          if [ -n "$desc" ]; then args+=(--description "$desc"); fi
+          gh repo edit "$GITHUB_REPOSITORY" "${args[@]}" || echo "::warning::Could not update the About section (the PAT needs Administration: write)"
+
+      - name: Refresh the README's live link and screenshots
+        env:
+          SHOTS: ${{ runner.temp }}/screenshots
+        run: |
+          set -euo pipefail
+          mkdir -p docs/screenshots
+          # Screenshots are light only; drop dark ones an older Publisher committed.
+          git rm -q --ignore-unmatch docs/screenshots/desktop-dark.png docs/screenshots/section-dark.png docs/screenshots/mobile-dark.png
+          # Only our own file names, and only real PNGs of a sane size.
+          for name in desktop-light section-light mobile-light; do
+            f="$SHOTS/$name.png"
+            [ -f "$f" ] || continue
+            if [ "$(head -c 8 "$f" | od -An -tx1 | tr -d ' \n')" = "89504e470d0a1a0a" ] && [ "$(stat -c %s "$f")" -lt 3000000 ]; then
+              cp "$f" "docs/screenshots/$name.png"
+            fi
+          done
+
+          [ -f README.md ] || { echo "::notice::No README.md"; exit 0; }
+          python3 - "$URL" "${GITHUB_REPOSITORY#*/}" <<'PY'
+          import os, re, sys
+          url, name = sys.argv[1], sys.argv[2]
+          host = url.split("://", 1)[-1].rstrip("/")
+          have = lambda n: os.path.exists(f"docs/screenshots/{n}.png")
+
+          def picture(base, alt, width=None):
+              if not have(f"{base}-light"):
+                  return ""
+              w = f' width="{width}"' if width else ""
+              return f'<img alt="{alt}" src="docs/screenshots/{base}-light.png"{w}>'
+
+          blocks = {
+              "live": f"**[Open {name} → {host}]({url})**",
+              "screenshots": "\n\n".join(
+                  part
+                  for part in [
+                      picture("desktop", f"{name}, first screen on a desktop browser"),
+                      picture("section", f"{name}, the main view"),
+                      (lambda p: f'<p align="center">\n{p}\n</p>' if p else "")(picture("mobile", f"{name} on a phone", 320)),
+                      "<sub>Screenshots of the live site, refreshed on every deploy.</sub>"
+                      if have("desktop-light") else "",
+                  ]
+                  if part
+              ),
+          }
+          text = open("README.md", encoding="utf-8").read()
+          for key, body in blocks.items():
+              pattern = re.compile(rf"(<!-- greenlight:{key} -->)(.*?)(<!-- /greenlight:{key} -->)", re.S)
+              if not pattern.search(text):
+                  print(f"README has no greenlight:{key} block; left as is")
+                  continue
+              text = pattern.sub(lambda m: f"{m.group(1)}\n{body}\n{m.group(3)}", text, count=1)
+          open("README.md", "w", encoding="utf-8").write(text)
+          PY
+
+          git add README.md docs/screenshots
+          if git diff --cached --quiet; then echo "README and screenshots are up to date"; exit 0; fi
+          [ -n "$GH_TOKEN" ] || { echo "::notice::No GREENLIGHT_TOKEN, so nothing is pushed"; exit 0; }
+          git config user.name "greenlight-publisher"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # [skip ci]: this commit must not trigger another deploy.
+          git commit -q -m "docs: live link and screenshots [skip ci]"
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          for attempt in 1 2 3; do
+            git -c core.hooksPath=/dev/null pull -q --rebase "$remote" main \
+              && git -c core.hooksPath=/dev/null push -q "$remote" HEAD:main && exit 0
+            sleep $((attempt * 5))
+          done
+          exit 1
