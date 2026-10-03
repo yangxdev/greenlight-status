@@ -10,4 +10,8 @@ export interface Env {
   /** MongoDB Atlas connection string, set with `npx wrangler secret put MONGODB_URI`. */
   MONGODB_URI?: string;
   MONGODB_DB?: string;
+  /** Public GitHub repo to read (plain var in wrangler.jsonc). Falls back to yangxdev/greenlight when invalid. */
+  SOURCE_REPO?: string;
+  /** Optional read-only GitHub token, set with `npx wrangler secret put GITHUB_READ_TOKEN`. */
+  GITHUB_READ_TOKEN?: string;
 }
