@@ -15,8 +15,6 @@ A dashboard of the Greenlight pipeline: every project and the stage it is at, wh
 <!-- greenlight:screenshots -->
 <img alt="greenlight-status, first screen on a desktop browser" src="docs/screenshots/desktop-light.png">
 
-<img alt="greenlight-status, the main view" src="docs/screenshots/section-light.png">
-
 <p align="center">
 <img alt="greenlight-status on a phone" src="docs/screenshots/mobile-light.png" width="320">
 </p>
