@@ -7,7 +7,13 @@ import {
   parseWatchlist,
   type ParsedReport,
 } from './parse.ts';
-import { commentEvents, parseComments, summarizeProject, type IssueComment } from './project.ts';
+import {
+  attachChanges,
+  commentEvents,
+  parseComments,
+  summarizeProject,
+  type IssueComment,
+} from './project.ts';
 import { buildStages, parseWorkflowRuns } from './runs.ts';
 
 export const DEFAULT_REPO = 'yangxdev/greenlight';
@@ -141,8 +147,10 @@ export async function buildStatus(
     list.push(c);
     byIssue.set(c.issue, list);
   }
-  const projects = issues.map((issue) =>
-    summarizeProject(issue, byIssue.get(issue.number) ?? [], runs, report?.products ?? []),
+  const projects = attachChanges(
+    issues.map((issue) =>
+      summarizeProject(issue, byIssue.get(issue.number) ?? [], runs, report?.products ?? []),
+    ),
   );
   const stageEvents = issues.flatMap((issue) =>
     (byIssue.get(issue.number) ?? [])

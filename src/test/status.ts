@@ -37,6 +37,8 @@ export function makeSteps(upTo: number, status: StepStatus = 'done') {
 export function makeProject(overrides: Partial<ProjectSummary> = {}): ProjectSummary {
   return {
     number: 5,
+    kind: 'idea',
+    parent: null,
     name: 'greenlight-status',
     url: 'https://github.com/yangxdev/greenlight/issues/5',
     states: ['idea'],
@@ -52,6 +54,7 @@ export function makeProject(overrides: Partial<ProjectSummary> = {}): ProjectSum
     verdict: null,
     reason: null,
     score: null,
+    changes: [],
     ...overrides,
   };
 }

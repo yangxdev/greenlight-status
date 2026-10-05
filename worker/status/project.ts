@@ -1,6 +1,7 @@
 import {
   STAGES,
   type Attention,
+  type ChangeSummary,
   type CriticRun,
   type ProjectEvent,
   type ProjectStep,
@@ -137,14 +138,17 @@ const at = (id: StageId) => ORDER.indexOf(id);
  * Comments say what happened; the labels say what is happening now, and win where they disagree.
  */
 export function deriveSteps(
-  issue: Pick<IdeaIssue, 'states' | 'author' | 'createdAt'>,
+  issue: Pick<IdeaIssue, 'states' | 'author' | 'createdAt'> & { kind?: IdeaIssue['kind'] },
   events: ProjectEvent[],
 ): { steps: ProjectStep[]; current: StageId; attention: Attention | null } {
   const last = new Map<StageId, ProjectEvent>();
   for (const e of events) if (e.stage) last.set(e.stage, e);
 
-  const fromCritic = issue.author === BOT;
+  const change = issue.kind === 'change';
+  // A change skips the idea stages (it comes from you or the Observer) and the weekly report (its product has one).
+  const fromCritic = issue.author === BOT && !change;
   const steps: ProjectStep[] = STAGES.map(({ id }) => {
+    if (change && id === 'observer') return { stage: id, status: 'skipped', at: null };
     if (id === 'scout' || id === 'analyst' || id === 'critic') {
       return fromCritic
         ? { stage: id, status: 'done', at: issue.createdAt }
@@ -179,6 +183,9 @@ export function deriveSteps(
     attention = 'stuck';
   } else if (has('archived')) {
     active = null;
+  } else if (has('shipped')) {
+    set('publisher', 'done');
+    active = null;
   } else if (has('live')) {
     set('publisher', 'done');
     if (last.has('observer')) set('observer', 'done');
@@ -209,7 +216,9 @@ export function deriveSteps(
   }
 
   // A re-run starts over from the active stage: older results after it are history, not progress.
-  if (active) for (const s of steps.slice(at(active) + 1)) s.status = 'pending';
+  if (active) {
+    for (const s of steps.slice(at(active) + 1)) if (s.status !== 'skipped') s.status = 'pending';
+  }
   // Everything before the active stage happened, even when a comment is missing (older than the comments read).
   if (active) {
     for (const s of steps.slice(at('board'), at(active)))
@@ -230,6 +239,10 @@ export function summarizeProject(
   runs: CriticRun[],
   report: ReportProduct[],
 ): ProjectSummary {
+  if (issue.kind === 'change') {
+    runs = [];
+    report = [];
+  }
   const events = comments.flatMap(commentEvents);
   const { steps, current, attention } = deriveSteps(issue, events);
   const verdict = report.find((p) => p.issue === issue.number) ?? null;
@@ -244,6 +257,8 @@ export function summarizeProject(
   }
   return {
     number: issue.number,
+    kind: issue.kind,
+    parent: issue.parent,
     name: issue.name,
     url: issue.url,
     states: issue.states,
@@ -259,5 +274,38 @@ export function summarizeProject(
     verdict: verdict?.verdict ?? null,
     reason: verdict ? verdict.reason : null,
     score,
+    changes: [],
   };
+}
+
+export function toChangeSummary(p: ProjectSummary): ChangeSummary {
+  return {
+    number: p.number,
+    name: p.name,
+    url: p.url,
+    states: p.states,
+    closed: p.closed,
+    current: p.current,
+    attention: p.closed ? null : p.attention,
+    updatedAt: p.updatedAt,
+  };
+}
+
+/**
+ * Ideas with their changes attached. A change whose product isn't among the ideas read (older than the issues read,
+ * or naming no product) is left out of the board; it still has its own page.
+ */
+export function attachChanges(all: ProjectSummary[]): ProjectSummary[] {
+  const ideas = all.filter((p) => p.kind === 'idea');
+  const byNumber = new Map(ideas.map((p) => [p.number, p]));
+  for (const p of all) {
+    if (p.kind !== 'change' || p.parent === null) continue;
+    byNumber.get(p.parent)?.changes.push(toChangeSummary(p));
+  }
+  for (const idea of ideas) {
+    idea.changes.sort(
+      (a, b) => Number(a.closed) - Number(b.closed) || (a.number < b.number ? 1 : -1),
+    );
+  }
+  return ideas;
 }

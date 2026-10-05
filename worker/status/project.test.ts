@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { IdeaState, ProjectEvent, StageId, StepStatus } from '../../shared/api.ts';
 import {
+  attachChanges,
   cleanText,
   commentEvents,
   deriveSteps,
   eventStatus,
   lastMarker,
   parseComments,
+  summarizeProject,
   type IssueComment,
 } from './project.ts';
 
@@ -200,5 +202,99 @@ describe('deriveSteps', () => {
     const { by } = statuses(['approved'], [event('publisher', '**Publisher:** live')]);
     expect(by.architect).toBe('running');
     expect(by.publisher).toBe('pending');
+  });
+});
+
+describe('changes', () => {
+  it('a requested change waits for approval and skips the idea stages and the Observer', () => {
+    const { steps, attention } = deriveSteps(
+      {
+        kind: 'change',
+        states: ['idea'],
+        author: 'github-actions[bot]',
+        createdAt: '2026-10-01T00:00:00Z',
+      },
+      [],
+    );
+    const by = Object.fromEntries(steps.map((s) => [s.stage, s.status]));
+    expect([by.scout, by.analyst, by.critic, by.observer]).toEqual([
+      'skipped',
+      'skipped',
+      'skipped',
+      'skipped',
+    ]);
+    expect(by.board).toBe('waiting');
+    expect(attention).toBe('approve');
+  });
+
+  it('a shipped change has published and needs nobody', () => {
+    const { steps, current, attention } = deriveSteps(
+      {
+        kind: 'change',
+        states: ['shipped'],
+        author: 'yangxdev',
+        createdAt: '2026-10-01T00:00:00Z',
+      },
+      [event('publisher', '**Publisher:** shipped to https://x.workers.dev')],
+    );
+    expect(steps.find((s) => s.stage === 'publisher')?.status).toBe('done');
+    expect(steps.find((s) => s.stage === 'observer')?.status).toBe('skipped');
+    expect(current).toBe('publisher');
+    expect(attention).toBeNull();
+  });
+});
+
+describe('attachChanges', () => {
+  it('puts each change under its product, open ones first, and drops changes from the project list', () => {
+    const idea = (n: number) =>
+      summarizeProject(
+        {
+          number: n,
+          kind: 'idea',
+          parent: null,
+          name: `p${n}`,
+          states: ['live'],
+          url: '',
+          closed: false,
+          author: 'yangxdev',
+          createdAt: '',
+          updatedAt: '',
+        },
+        [],
+        [],
+        [],
+      );
+    const change = (n: number, parent: number | null, closed = false) =>
+      summarizeProject(
+        {
+          number: n,
+          kind: 'change',
+          parent,
+          name: `c${n}`,
+          states: closed ? ['shipped'] : ['idea'],
+          url: '',
+          closed,
+          author: 'yangxdev',
+          createdAt: '',
+          updatedAt: '',
+        },
+        [],
+        [],
+        [],
+      );
+    const projects = attachChanges([
+      change(9, 1, true),
+      change(10, 1),
+      change(11, 2),
+      change(12, null),
+      idea(1),
+      idea(2),
+    ]);
+    expect(projects.map((p) => p.number)).toEqual([1, 2]);
+    expect(projects[0]?.changes.map((c) => [c.number, c.attention])).toEqual([
+      [10, 'approve'],
+      [9, null],
+    ]);
+    expect(projects[1]?.changes.map((c) => c.number)).toEqual([11]);
   });
 });

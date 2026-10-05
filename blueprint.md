@@ -15,6 +15,8 @@ rules forbid accounts) and moves the product to the template's new `app` layout.
 - **Project** (`/p/:number`): each stage's status and its reports from the issue, the idea's sections, the product
   repo's pull requests and runs, the discussion.
 - **Ideas** (`/ideas`): scored cards per Critic run and the watchlist, as tabs.
+- **Changes** (`[change]` issues, sub-issues of a live product's idea issue): listed on the product's page and its
+  tile, each with its own page at `/p/:number` and the same gates. The owner files one with "Request a change".
 - **Owner only**, after GitHub sign-in: new idea (drawer), approve, start the build, redo the blueprint, retry, archive,
   comment.
 
@@ -57,6 +59,7 @@ A project's ten steps are derived (`worker/status/project.ts`), never stored:
 | api  | `POST /api/ideas` | file an idea as the owner | `NewIdea` | 201 `NewIdeaResponse` |
 | api  | `POST /api/projects/:number/actions` | gate, retry, archive | `{ action }` | 200, 409 |
 | api  | `POST /api/projects/:number/comments` | feedback | `{ body }` | 201 |
+| api  | `POST /api/projects/:number/changes` | a change to a live product, filed as its sub-issue | `NewChange` | 201 `NewIdeaResponse`, 409 if not live |
 | api  | `GET /api/health` | smoke test (keep) | – | `HealthResponse` |
 
 Writes need the owner's session and `Origin` equal to the Worker's origin. GitHub errors come back as 502 with

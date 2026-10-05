@@ -36,15 +36,18 @@ function inline(text: string): ReactNode[] {
 }
 
 const BULLET = /^\s*[-*]\s+/;
+const QUOTE = /^\s*>\s?/;
 
-/** A block's lines as runs: consecutive "- " lines become one list, everything else one paragraph. */
-function runs(block: string): { list: boolean; lines: string[] }[] {
-  const out: { list: boolean; lines: string[] }[] = [];
+type Run = { kind: 'list' | 'quote' | 'text'; lines: string[] };
+
+/** A block's lines as runs: consecutive "- " lines become one list, "> " lines one quote, the rest a paragraph. */
+function runs(block: string): Run[] {
+  const out: Run[] = [];
   for (const line of block.split('\n')) {
-    const list = BULLET.test(line);
+    const kind = BULLET.test(line) ? 'list' : QUOTE.test(line) ? 'quote' : 'text';
     const last = out.at(-1);
-    if (last && last.list === list) last.lines.push(line);
-    else out.push({ list, lines: [line] });
+    if (last && last.kind === kind) last.lines.push(line);
+    else out.push({ kind, lines: [line] });
   }
   return out;
 }
@@ -61,7 +64,14 @@ export function RichText({ text, className }: { text: string; className?: string
   return (
     <div className={cn('space-y-3 text-small text-ink-soft', className)}>
       {parts.map((part, i) =>
-        part.list ? (
+        part.kind === 'quote' ? (
+          <blockquote
+            key={i}
+            className="border-l-2 border-line-strong pl-3 break-words whitespace-pre-line text-muted"
+          >
+            {inline(part.lines.map((l) => l.replace(QUOTE, '')).join('\n'))}
+          </blockquote>
+        ) : part.kind === 'list' ? (
           <ul key={i} className="list-none space-y-1">
             {part.lines.map((l, j) => (
               <li key={j} className="flex gap-2">

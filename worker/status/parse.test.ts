@@ -88,3 +88,52 @@ describe('parseReport', () => {
     expect(parseReport(null)).toBeNull();
   });
 });
+
+describe('change issues', () => {
+  const issue = (extra: Record<string, unknown>) => ({
+    number: 12,
+    title: '[change] Move to the app layout',
+    state: 'open',
+    labels: [{ name: 'change' }],
+    ...extra,
+  });
+
+  it('reads a change and finds its product from the sub-issue parent, the marker, or the form field', () => {
+    const [fromApi] = parseIdeaIssues(
+      [
+        issue({
+          parent_issue_url: 'https://api.github.com/repos/a/b/issues/5',
+          body: 'greenlight:parent=7',
+        }),
+      ],
+      'a/b',
+    );
+    expect(fromApi).toMatchObject({
+      kind: 'change',
+      parent: 5,
+      name: 'Move to the app layout',
+      states: ['idea'],
+    });
+    const [fromMarker] = parseIdeaIssues(
+      [issue({ body: 'x\n<!-- greenlight:parent=7 -->' })],
+      'a/b',
+    );
+    expect(fromMarker?.parent).toBe(7);
+    const [fromForm] = parseIdeaIssues(
+      [issue({ body: '### Product issue\n\n#3\n\n### What should change\n\nx' })],
+      'a/b',
+    );
+    expect(fromForm?.parent).toBe(3);
+    const [none] = parseIdeaIssues([issue({ body: 'no product named' })], 'a/b');
+    expect(none?.parent).toBeNull();
+  });
+
+  it('a closed, shipped change keeps its shipped state', () => {
+    const [shipped] = parseIdeaIssues(
+      [issue({ state: 'closed', labels: [{ name: 'change' }, { name: 'shipped' }] })],
+      'a/b',
+    );
+    expect(shipped?.states).toEqual(['shipped']);
+    expect(shipped?.closed).toBe(true);
+  });
+});

@@ -31,10 +31,12 @@ A dashboard of the Greenlight pipeline: every project and the stage it is at, wh
 - **A project** (`/p/<issue>`): each stage's reports from the issue (the Architect's tasks, the Reviewer's notes,
   the Factory's pull requests, the Inspector's verdict, the live link), the idea as written, the product repo's
   pull requests and runs, and the discussion.
+- **Changes:** a live product's changes (sub-issues of its idea issue) are listed on its page and open their own page
+  with the same stages. A change waiting for you shows on its product's tile.
 - **Ideas:** every card the Critic scored, newest run first, and the watchlist of near misses.
 - **For the owner, signed in with GitHub:** write a new idea in a form (the same fields as GitHub's Idea form, with
-  the repo name it will get, and "approve it now"), approve an idea, start a build, redo a blueprint, retry a stuck
-  project, archive one, and comment feedback for the Architect.
+  the repo name it will get, and "approve it now"), request a change to a live product, approve an idea or a change,
+  start a build, redo a blueprint, retry a stuck project, archive one, and comment feedback for the Architect.
 
 ## How to use it
 

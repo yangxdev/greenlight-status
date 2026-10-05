@@ -6,7 +6,7 @@ import {
   type WatchEntry,
 } from '../../shared/api.ts';
 
-const IDEA_PREFIX = '[idea] ';
+const PREFIXES = { idea: '[idea] ', change: '[change] ' } as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -16,10 +16,13 @@ function isState(value: string): value is IdeaState {
   return (IDEA_STATES as readonly string[]).includes(value);
 }
 
-/** An idea issue as the board needs it, before its comments are read. */
+/** An idea or change issue as the board needs it, before its comments are read. */
 export interface IdeaIssue {
   number: number;
-  /** Title without the "[idea] " prefix. */
+  kind: 'idea' | 'change';
+  /** For a change: its product's idea issue, if it says which. */
+  parent: number | null;
+  /** Title without the "[idea] " or "[change] " prefix. */
   name: string;
   states: IdeaState[];
   url: string;
@@ -27,6 +30,22 @@ export interface IdeaIssue {
   author: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * A change's product issue: the sub-issue parent if the API says, else the dashboard's and Observer's marker, else the
+ * Change form's "Product issue" field. The same order the Architect uses.
+ */
+export function findParent(item: Record<string, unknown>): number | null {
+  const fromUrl = /\/issues\/(\d+)$/.exec(
+    typeof item.parent_issue_url === 'string' ? item.parent_issue_url : '',
+  )?.[1];
+  if (fromUrl) return Number(fromUrl);
+  const body = typeof item.body === 'string' ? item.body : '';
+  const marker = /greenlight:parent=(\d+)/.exec(body)?.[1];
+  if (marker) return Number(marker);
+  const field = /^###\s+Product issue\s*\n+[^\n#]*#(\d+)/m.exec(body)?.[1];
+  return field ? Number(field) : null;
 }
 
 export function parseIdeaIssues(json: unknown, repo: string): IdeaIssue[] {
@@ -37,7 +56,12 @@ export function parseIdeaIssues(json: unknown, repo: string): IdeaIssue[] {
     const { number, title, state, labels, html_url: htmlUrl, user } = item;
     const { created_at: createdAt, updated_at: updatedAt } = item;
     if (typeof number !== 'number' || typeof title !== 'string') continue;
-    if (!title.startsWith(IDEA_PREFIX)) continue;
+    const kind = title.startsWith(PREFIXES.idea)
+      ? 'idea'
+      : title.startsWith(PREFIXES.change)
+        ? 'change'
+        : null;
+    if (!kind) continue;
     const found = new Set<IdeaState>();
     if (Array.isArray(labels)) {
       for (const label of labels as unknown[]) {
@@ -47,9 +71,12 @@ export function parseIdeaIssues(json: unknown, repo: string): IdeaIssue[] {
     }
     let states: IdeaState[] = IDEA_STATES.filter((s) => found.has(s));
     if (states.length === 0) states = [state === 'closed' ? 'archived' : 'idea'];
+    const parent = kind === 'change' ? findParent(item) : null;
     ideas.push({
       number,
-      name: title.slice(IDEA_PREFIX.length).trim(),
+      kind,
+      parent: parent === number ? null : parent,
+      name: title.slice(PREFIXES[kind].length).trim(),
       states,
       url: typeof htmlUrl === 'string' ? htmlUrl : `https://github.com/${repo}/issues/${number}`,
       closed: state === 'closed',

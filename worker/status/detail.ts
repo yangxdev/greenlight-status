@@ -97,6 +97,7 @@ export async function buildProject(
     ...summary,
     verdict: fromBoard?.verdict ?? null,
     reason: fromBoard?.reason ?? null,
+    changes: fromBoard?.changes ?? [],
     body: parseIdeaBody(isRecord(issueJson) ? issueJson.body : null),
     events: comments.flatMap(commentEvents),
     pulls: parsePulls(pullsJson),
@@ -106,6 +107,9 @@ export async function buildProject(
       title: `${workflow.replace(/\.ya?ml$/, '')}: ${title}`,
       url,
     })),
-    blueprintUrl: productRepo ? `https://github.com/${productRepo}/blob/main/blueprint.md` : null,
+    // A change's spec is changes/<issue>.md; its repo marker only appears once the Architect committed it.
+    blueprintUrl: productRepo
+      ? `https://github.com/${productRepo}/blob/main/${summary.kind === 'change' ? `changes/${number}.md` : 'blueprint.md'}`
+      : null,
   };
 }
