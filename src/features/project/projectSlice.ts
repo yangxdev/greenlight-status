@@ -1,0 +1,76 @@
+import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
+import type {
+  NewIdea,
+  NewIdeaResponse,
+  ProjectAction,
+  ProjectDetail,
+} from '../../../shared/api.ts';
+import { apiGet, apiPost } from '../../lib/api.ts';
+import { fetchStatus } from '../status/statusSlice.ts';
+
+export interface ProjectEntry {
+  status: 'loading' | 'ready' | 'error';
+  data: ProjectDetail | null;
+  error: string | null;
+}
+
+export type ProjectState = Record<number, ProjectEntry>;
+
+export const fetchProject = createAsyncThunk('project/fetch', (number: number) =>
+  apiGet<ProjectDetail>(`/projects/${number}`),
+);
+
+/** A gate, a retry or archive, then both views reread so the new labels show. */
+export const runAction = createAsyncThunk(
+  'project/action',
+  async ({ number, action }: { number: number; action: ProjectAction }, { dispatch }) => {
+    await apiPost(`/projects/${number}/actions`, { action });
+    void dispatch(fetchProject(number));
+    void dispatch(fetchStatus());
+  },
+);
+
+export const addComment = createAsyncThunk(
+  'project/comment',
+  async ({ number, body }: { number: number; body: string }, { dispatch }) => {
+    await apiPost(`/projects/${number}/comments`, { body });
+    void dispatch(fetchProject(number));
+  },
+);
+
+export const createIdea = createAsyncThunk(
+  'project/create',
+  async (idea: NewIdea, { dispatch }) => {
+    const created = await apiPost<NewIdeaResponse>('/ideas', idea);
+    void dispatch(fetchStatus());
+    return created;
+  },
+);
+
+export const projectSlice = createSlice({
+  name: 'project',
+  initialState: {} as ProjectState,
+  reducers: {},
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchProject.pending, (state, action) => {
+        const entry = state[action.meta.arg];
+        // Keep the old copy on screen while rereading.
+        state[action.meta.arg] = { status: 'loading', data: entry?.data ?? null, error: null };
+      })
+      .addCase(fetchProject.fulfilled, (state, action) => {
+        state[action.meta.arg] = { status: 'ready', data: action.payload, error: null };
+      })
+      .addCase(fetchProject.rejected, (state, action) => {
+        const entry = state[action.meta.arg];
+        state[action.meta.arg] = {
+          status: 'error',
+          data: entry?.data ?? null,
+          error: action.error.message ?? 'Unknown error',
+        };
+      });
+  },
+});
+
+export const selectProject = (state: { project: ProjectState }, number: number) =>
+  state.project[number];

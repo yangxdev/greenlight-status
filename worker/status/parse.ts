@@ -2,13 +2,11 @@ import {
   IDEA_STATES,
   type CriticRow,
   type IdeaState,
-  type PipelineIdea,
   type Verdict,
   type WatchEntry,
 } from '../../shared/api.ts';
 
 const IDEA_PREFIX = '[idea] ';
-const MARKER = /<!--\s*greenlight:repo=([\w.-]+\/[\w.-]+)\s*-->/g;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -18,12 +16,26 @@ function isState(value: string): value is IdeaState {
   return (IDEA_STATES as readonly string[]).includes(value);
 }
 
-export function parseIdeaIssues(json: unknown, repo: string): PipelineIdea[] {
+/** An idea issue as the board needs it, before its comments are read. */
+export interface IdeaIssue {
+  number: number;
+  /** Title without the "[idea] " prefix. */
+  name: string;
+  states: IdeaState[];
+  url: string;
+  closed: boolean;
+  author: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function parseIdeaIssues(json: unknown, repo: string): IdeaIssue[] {
   if (!Array.isArray(json)) return [];
-  const ideas: PipelineIdea[] = [];
+  const ideas: IdeaIssue[] = [];
   for (const item of json as unknown[]) {
     if (!isRecord(item) || 'pull_request' in item) continue;
-    const { number, title, state, labels, html_url: htmlUrl } = item;
+    const { number, title, state, labels, html_url: htmlUrl, user } = item;
+    const { created_at: createdAt, updated_at: updatedAt } = item;
     if (typeof number !== 'number' || typeof title !== 'string') continue;
     if (!title.startsWith(IDEA_PREFIX)) continue;
     const found = new Set<IdeaState>();
@@ -40,6 +52,10 @@ export function parseIdeaIssues(json: unknown, repo: string): PipelineIdea[] {
       name: title.slice(IDEA_PREFIX.length).trim(),
       states,
       url: typeof htmlUrl === 'string' ? htmlUrl : `https://github.com/${repo}/issues/${number}`,
+      closed: state === 'closed',
+      author: isRecord(user) && typeof user.login === 'string' ? user.login : '',
+      createdAt: typeof createdAt === 'string' ? createdAt : '',
+      updatedAt: typeof updatedAt === 'string' ? updatedAt : '',
     });
   }
   return ideas;
@@ -159,14 +175,4 @@ export function parseReport(json: unknown): ParsedReport | null {
     }
   }
   return { week, summary, products: out };
-}
-
-export function findRepoMarker(comments: unknown): string | null {
-  if (!Array.isArray(comments)) return null;
-  let found: string | null = null;
-  for (const c of comments as unknown[]) {
-    if (!isRecord(c) || typeof c.body !== 'string') continue;
-    for (const m of c.body.matchAll(MARKER)) found = m[1] ?? found;
-  }
-  return found;
 }

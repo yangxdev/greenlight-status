@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  findRepoMarker,
-  parseCriticTable,
-  parseIdeaIssues,
-  parseReport,
-  parseWatchlist,
-} from './parse.ts';
+import { parseCriticTable, parseIdeaIssues, parseReport, parseWatchlist } from './parse.ts';
 
 const HEAD = '| Name | Pain | Competition | MVP | Reach | Total |\n|---|---|---|---|---|---|\n';
 
@@ -79,16 +73,7 @@ describe('parseWatchlist', () => {
   });
 });
 
-describe('findRepoMarker and parseReport', () => {
-  it('AC6: last marker wins, none gives null', () => {
-    const c = [
-      { body: 'x <!-- greenlight:repo=a/one -->' },
-      { body: '<!-- greenlight:repo=a/two -->' },
-    ];
-    expect(findRepoMarker(c)).toBe('a/two');
-    expect(findRepoMarker([{ body: 'hi' }])).toBeNull();
-  });
-
+describe('parseReport', () => {
   it('AC6: drops report entries without a verdict, keeps week', () => {
     const r = parseReport({
       week: '2026-W40',

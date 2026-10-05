@@ -13,7 +13,12 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "preview_urls": false,
-  "vars": { "SOURCE_REPO": "yangxdev/greenlight" },
+  "vars": {
+    "SOURCE_REPO": "yangxdev/greenlight",
+    // The GitHub App's client ID (README → "Sign-in"). Empty keeps the dashboard read-only for everyone.
+    // Its client secret and SESSION_SECRET are secrets: `npx wrangler secret put …`, never here.
+    "GITHUB_APP_CLIENT_ID": "",
+  },
   "observability": { "enabled": true },
   "assets": {
     "directory": "./dist",

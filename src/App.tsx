@@ -1,19 +1,21 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Outlet, Route, Routes, useLocation } from 'react-router';
+import { BrowserRouter, Link, Outlet, Route, Routes, useLocation } from 'react-router';
 import { useAppDispatch, useAppSelector } from './app/hooks.ts';
 import { DEFAULT_SOURCE_REPO, SITE_REPO } from './app/site.ts';
-import { SiteFooter, SiteHeader } from './components/shell/index.ts';
-import { Note } from './components/ui/index.ts';
-import Ideas from './features/status/Ideas.tsx';
-import Overview from './features/status/Overview.tsx';
+import { AppFooter, AppHeader, AppShell } from './components/shell/index.ts';
+import Board from './features/board/Board.tsx';
+import Ideas from './features/ideas/Ideas.tsx';
+import Project from './features/project/Project.tsx';
+import { fetchMe } from './features/session/sessionSlice.ts';
+import { SessionControls } from './features/session/SessionControls.tsx';
 import { fetchStatus, selectStatus } from './features/status/statusSlice.ts';
 
 const NAV = [
-  { href: '/', label: 'overview' },
+  { href: '/', label: 'pipeline' },
   { href: '/ideas', label: 'ideas' },
 ];
 
-/** Header, footer and the one status fetch, shared by both screens. */
+/** The bar, the footer strip, and the two fetches every screen shares: the board document and who is signed in. */
 function Layout() {
   const dispatch = useAppDispatch();
   const { pathname } = useLocation();
@@ -22,24 +24,36 @@ function Layout() {
 
   useEffect(() => {
     void dispatch(fetchStatus());
+    void dispatch(fetchMe());
   }, [dispatch]);
 
   return (
-    <div className="min-h-dvh">
-      <SiteHeader nav={NAV} current={pathname === '/ideas' ? '/ideas' : '/'} />
-      <main>
-        <Outlet />
-      </main>
-      <SiteFooter
-        links={[
-          { href: `https://github.com/${SITE_REPO}`, label: 'source' },
-          { href: `https://github.com/${sourceRepo}`, label: 'greenlight' },
-          { href: `https://github.com/${sourceRepo}#readme`, label: 'readme' },
-        ]}
-      >
-        <Note>This page is read from GitHub and cached for ten minutes. Nothing is stored.</Note>
-      </SiteFooter>
-    </div>
+    <AppShell
+      header={
+        <AppHeader
+          nav={NAV}
+          current={pathname === '/ideas' ? '/ideas' : '/'}
+          actions={<SessionControls />}
+          renderLink={(item, props) => (
+            <Link to={item.href} {...props}>
+              {item.label}
+            </Link>
+          )}
+        />
+      }
+      footer={
+        <AppFooter
+          links={[
+            { href: `https://github.com/${SITE_REPO}`, label: 'source' },
+            { href: `https://github.com/${sourceRepo}`, label: 'greenlight' },
+          ]}
+        >
+          Read from GitHub, cached for five minutes. Only the pipeline’s owner can sign in and act.
+        </AppFooter>
+      }
+    >
+      <Outlet />
+    </AppShell>
   );
 }
 
@@ -48,9 +62,10 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route element={<Layout />}>
-          <Route index element={<Overview />} />
+          <Route index element={<Board />} />
           <Route path="ideas" element={<Ideas />} />
-          <Route path="*" element={<Overview />} />
+          <Route path="p/:number" element={<Project />} />
+          <Route path="*" element={<Board />} />
         </Route>
       </Routes>
     </BrowserRouter>
