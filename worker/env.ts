@@ -14,4 +14,11 @@ export interface Env {
   SOURCE_REPO?: string;
   /** Optional read-only GitHub token, set with `npx wrangler secret put GITHUB_READ_TOKEN`. */
   GITHUB_READ_TOKEN?: string;
+  /**
+   * Sign-in for the owner (all three, or the dashboard stays read-only). A GitHub App's client ID (plain var), its
+   * client secret and a random SESSION_SECRET that seals the session cookie (both `wrangler secret put`).
+   */
+  GITHUB_APP_CLIENT_ID?: string;
+  GITHUB_APP_CLIENT_SECRET?: string;
+  SESSION_SECRET?: string;
 }
