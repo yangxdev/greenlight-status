@@ -16,8 +16,8 @@
   "vars": {
     "SOURCE_REPO": "yangxdev/greenlight",
     // The GitHub App's client ID (README → "Sign-in"). Empty keeps the dashboard read-only for everyone.
-    // Its client secret and SESSION_SECRET are secrets: `npx wrangler secret put …`, never here.
-    "GITHUB_APP_CLIENT_ID": "",
+    // Its client secret and SESSION_SECRET are secrets (`npx wrangler secret put …` or the Cloudflare dashboard), never here.
+    "GITHUB_APP_CLIENT_ID": "Iv23liEPy7Ex4jiXxEx8",
   },
   "observability": { "enabled": true },
   "assets": {
