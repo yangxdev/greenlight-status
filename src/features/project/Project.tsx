@@ -25,6 +25,7 @@ import { messageOf } from '../../lib/api.ts';
 import { describeProject, RUN_TONE, RUN_WORDS, STEP_TONE, STEP_WORDS } from '../board/board.ts';
 import { StepBar } from '../board/StepBar.tsx';
 import { selectMe } from '../session/sessionSlice.ts';
+import { ChangeDrawer } from './ChangeDrawer.tsx';
 import { addComment, fetchProject, runAction, selectProject } from './projectSlice.ts';
 
 const external = { target: '_blank', rel: 'noopener noreferrer' } as const;
@@ -86,7 +87,14 @@ function Stages({ project }: { project: ProjectDetail }) {
               ) : null}
               {id === 'scout' && status === 'skipped' ? (
                 <p className="text-small text-muted">
-                  Written by hand, so the Scout, Analyst and Critic never saw it.
+                  {project.kind === 'change'
+                    ? 'A change starts at the Board: you asked for it, or the Observer did.'
+                    : 'Written by hand, so the Scout, Analyst and Critic never saw it.'}
+                </p>
+              ) : null}
+              {id === 'observer' && project.kind === 'change' ? (
+                <p className="text-small text-muted">
+                  A shipped change is watched in its product&rsquo;s weekly report.
                 </p>
               ) : null}
               {id === 'observer' && project.verdict ? (
@@ -215,15 +223,82 @@ function CommentForm({ number }: { number: number }) {
   );
 }
 
+/** An idea's changes, each linking to its own page; the owner asks for a new one here. */
+function Changes({ project, owner }: { project: ProjectDetail; owner: boolean }) {
+  const [drawer, setDrawer] = useState(false);
+  const live = project.states.includes('live');
+  return (
+    <Pane label="Changes" aside={project.changes.length || undefined} flush>
+      {project.changes.length > 0 ? (
+        <ul>
+          {project.changes.map((change) => {
+            const tone =
+              change.attention === 'stuck'
+                ? 'danger'
+                : change.attention
+                  ? 'attention'
+                  : change.closed
+                    ? 'idle'
+                    : 'active';
+            const words = change.closed
+              ? change.states.includes('shipped')
+                ? 'Shipped'
+                : 'Closed'
+              : change.attention === 'stuck'
+                ? 'Stuck'
+                : change.attention
+                  ? 'Waiting for you'
+                  : 'In progress';
+            return (
+              <li
+                key={change.number}
+                className="flex items-baseline justify-between gap-4 border-b border-line px-4 py-3 last:border-b-0"
+              >
+                <Link to={`/p/${change.number}`} className={`${linkClass} min-w-0 text-small`}>
+                  #{change.number} {change.name}
+                </Link>
+                <span className="flex shrink-0 items-center gap-2 font-mono text-note text-muted">
+                  <StatusDot tone={tone} label={words} />
+                  <span aria-hidden="true">{words}</span>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="p-4 text-small text-muted">
+          {live ? 'No changes yet.' : 'Changes can be asked for once the product is live.'}
+        </p>
+      )}
+      {owner && live ? (
+        <div className="border-t border-line p-4">
+          <Button size="sm" onClick={() => setDrawer(true)}>
+            Request a change
+          </Button>
+          <ChangeDrawer
+            open={drawer}
+            onClose={() => setDrawer(false)}
+            parent={project.number}
+            product={project.name}
+          />
+        </div>
+      ) : null}
+    </Pane>
+  );
+}
+
 function ProjectView({ project, owner }: { project: ProjectDetail; owner: boolean }) {
   const { text, tone } = describeProject(project);
   const discussion = project.events.filter((e) => e.stage === null);
+  const change = project.kind === 'change';
   const links = [
     { href: project.url, label: `issue #${project.number}` },
     project.productRepo
       ? { href: `https://github.com/${project.productRepo}`, label: 'repo' }
       : null,
-    project.blueprintUrl ? { href: project.blueprintUrl, label: 'blueprint' } : null,
+    project.blueprintUrl
+      ? { href: project.blueprintUrl, label: change ? 'change spec' : 'blueprint' }
+      : null,
     project.liveUrl ? { href: project.liveUrl, label: 'live site' } : null,
   ].filter((l) => l !== null);
 
@@ -235,7 +310,17 @@ function ProjectView({ project, owner }: { project: ProjectDetail; owner: boolea
             <Link to="/" className={linkClass}>
               Pipeline
             </Link>{' '}
-            / #{project.number}
+            {change && project.parent ? (
+              <>
+                /{' '}
+                <Link to={`/p/${project.parent}`} className={linkClass}>
+                  #{project.parent}
+                </Link>{' '}
+                / change #{project.number}
+              </>
+            ) : (
+              <>/ #{project.number}</>
+            )}
           </>
         }
         title={project.name}
@@ -271,7 +356,9 @@ function ProjectView({ project, owner }: { project: ProjectDetail; owner: boolea
         </Pane>
 
         <div className="space-y-6">
-          <Pane label="Idea">
+          {change ? null : <Changes project={project} owner={owner} />}
+
+          <Pane label={change ? 'Request' : 'Idea'}>
             {project.body.length > 0 ? (
               <dl className="space-y-5">
                 {project.body.map((section) => (

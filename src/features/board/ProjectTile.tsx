@@ -8,6 +8,7 @@ import { StepBar } from './StepBar.tsx';
 /** One project in the grid: number and state, name, the ten-stage bar, and what it is doing now. */
 export function ProjectTile({ project, now }: { project: ProjectSummary; now: string }) {
   const { text, tone } = describeProject(project);
+  const openChanges = project.changes.filter((c) => !c.closed).length;
   return (
     <li className="bg-canvas">
       <Link
@@ -17,6 +18,7 @@ export function ProjectTile({ project, now }: { project: ProjectSummary; now: st
         <div className="flex items-baseline justify-between gap-3">
           <span className={`${labelClass} tnum`}>
             #{project.number} · {project.states.join(' + ')}
+            {openChanges > 0 ? ` · ${openChanges} ${openChanges === 1 ? 'change' : 'changes'}` : ''}
           </span>
           {project.score ? (
             <span className={`${labelClass} tnum`}>{project.score.total}/20</span>

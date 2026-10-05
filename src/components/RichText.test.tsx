@@ -27,4 +27,11 @@ describe('RichText', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
     expect(screen.getByText('After.').tagName).toBe('P');
   });
+
+  it('renders "> " lines as a quote', () => {
+    render(<RichText text={'Seen on HN:\n> "It re-enabled itself."\n> twice'} />);
+    const quote = screen.getByText(/It re-enabled itself/);
+    expect(quote.tagName).toBe('BLOCKQUOTE');
+    expect(quote.textContent).toBe('"It re-enabled itself."\ntwice');
+  });
 });

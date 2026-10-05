@@ -3,7 +3,7 @@ import { createRouter, type Route } from './router.ts';
 import { health } from './routes/health.ts';
 import { callback, login, logout, me } from './routes/auth.ts';
 import { project, status } from './routes/status.ts';
-import { addComment, createIdea, projectAction } from './routes/write.ts';
+import { addComment, createChange, createIdea, projectAction } from './routes/write.ts';
 
 /** Every API route. Add new ones here; handlers live in worker/routes/. */
 export const routes: Route[] = [
@@ -17,6 +17,7 @@ export const routes: Route[] = [
   { method: 'POST', pattern: '/api/ideas', handler: createIdea },
   { method: 'POST', pattern: '/api/projects/:number/actions', handler: projectAction },
   { method: 'POST', pattern: '/api/projects/:number/comments', handler: addComment },
+  { method: 'POST', pattern: '/api/projects/:number/changes', handler: createChange },
 ];
 
 const api = createRouter(routes);

@@ -1,6 +1,7 @@
 import type {
   CommentRequest,
   IdeaState,
+  NewChange,
   NewIdea,
   NewIdeaResponse,
   ProjectAction,
@@ -135,6 +136,40 @@ export function ideaBody(idea: NewIdea): string {
   ].join('\n\n');
 }
 
+export function validateChange(
+  body: Record<string, unknown>,
+): { change: NewChange } | { error: string } {
+  const change: NewChange = {
+    title: text(body.title).replace(/^\[change\]\s*/i, ''),
+    change: text(body.change),
+    why: text(body.why),
+    keep: text(body.keep),
+    approve: body.approve === true,
+  };
+  if (!change.title) return { error: 'Give the change a short title.' };
+  if (change.title.length > 80 || /[\r\n]/.test(change.title)) {
+    return { error: 'Keep the title to one line of at most 80 characters.' };
+  }
+  if (!change.change) return { error: 'Say what should change.' };
+  if ([change.change, change.why, change.keep].some((v) => v.length > MAX_FIELD)) {
+    return { error: `Keep each field under ${MAX_FIELD} characters.` };
+  }
+  return { change };
+}
+
+/** The Change form's markdown, plus the parent marker the Architect and the board read. */
+export function changeBody(parent: number, change: NewChange): string {
+  const section = (heading: string, value: string) =>
+    `### ${heading}\n\n${value || '_No response_'}`;
+  return [
+    section('Product issue', `#${parent}`),
+    section('What should change', change.change),
+    section('Why', change.why),
+    section('Must not change', change.keep),
+    `<!-- greenlight:parent=${parent} -->`,
+  ].join('\n\n');
+}
+
 /** Removing and re-adding a gate label is how a gate is re-run; the workflows only listen for "labeled". */
 async function applyGate(call: Call, repo: string, number: number, label: string, has: boolean) {
   if (has) await call('DELETE', `/repos/${repo}/issues/${number}/labels/${label}`);
@@ -259,7 +294,58 @@ export function makeWriteRoutes(fetchImpl: FetchLike = (i, init) => fetch(i, ini
     }
   };
 
-  return { createIdea, projectAction, addComment };
+  /**
+   * POST /api/projects/:number/changes: a change to that live product, filed as a [change] sub-issue of its idea
+   * issue, optionally approved right away.
+   */
+  const createChange: Handler = async (ctx) => {
+    const session = await requireOwner(ctx);
+    if (session instanceof Response) return session;
+    const parent = Number(ctx.params.number);
+    if (!Number.isInteger(parent) || parent < 1) return errorResponse(404, 'Unknown project.');
+    const body = await readBody(ctx.request);
+    if (!body) return errorResponse(400, 'Send the change as JSON.');
+    const checked = validateChange(body);
+    if ('error' in checked) return errorResponse(400, checked.error);
+    const { change } = checked;
+    const repo = resolveRepo(ctx.env);
+    const call = asOwner(session, fetchImpl);
+    try {
+      const [product] = parseIdeaIssues(
+        [await call('GET', `/repos/${repo}/issues/${parent}`)],
+        repo,
+      );
+      if (!product || product.kind !== 'idea') {
+        return errorResponse(404, 'No idea issue with that number.');
+      }
+      if (!product.states.includes('live')) {
+        return errorResponse(409, 'Changes are for live products; this one is not live.');
+      }
+      const created = (await call('POST', `/repos/${repo}/issues`, {
+        title: `[change] ${change.title}`,
+        body: changeBody(parent, change),
+        labels: ['change'],
+      })) as { id?: unknown; number?: unknown; html_url?: unknown };
+      if (typeof created.number !== 'number') return errorResponse(502, 'GitHub sent no issue.');
+      // The sub-issue link is what GitHub shows; the body's marker already ties it to the product if this fails.
+      if (typeof created.id === 'number') {
+        await call('POST', `/repos/${repo}/issues/${parent}/sub_issues`, {
+          sub_issue_id: created.id,
+        }).catch(() => undefined);
+      }
+      if (change.approve) await applyGate(call, repo, created.number, 'approved', false);
+      invalidate(parent);
+      const res: NewIdeaResponse = {
+        number: created.number,
+        url: typeof created.html_url === 'string' ? created.html_url : '',
+      };
+      return Response.json(res, { status: 201 });
+    } catch (error) {
+      return failed(error);
+    }
+  };
+
+  return { createIdea, createChange, projectAction, addComment };
 }
 
-export const { createIdea, projectAction, addComment } = makeWriteRoutes();
+export const { createIdea, createChange, projectAction, addComment } = makeWriteRoutes();

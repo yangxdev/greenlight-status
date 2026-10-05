@@ -114,3 +114,101 @@ describe('Project', () => {
     expect(await screen.findByText('Could not open this project')).toBeInTheDocument();
   });
 });
+
+describe('changes on the project page', () => {
+  const LIVE = makeDetail({
+    states: ['live'],
+    attention: null,
+    current: 'observer',
+    changes: [
+      {
+        number: 12,
+        name: 'Move to the app layout',
+        url: '',
+        states: ['blueprint-ready'],
+        closed: false,
+        current: 'reviewer',
+        attention: 'blueprint-ok',
+        updatedAt: '',
+      },
+      {
+        number: 9,
+        name: 'Add search',
+        url: '',
+        states: ['shipped'],
+        closed: true,
+        current: 'publisher',
+        attention: null,
+        updatedAt: '',
+      },
+    ],
+  });
+
+  it("lists a live product's changes and files a new one under it", async () => {
+    const user = userEvent.setup();
+    const { sent } = mockApi(
+      { '/api/projects/5': LIVE, '/api/status': makeStatus() },
+      {
+        '/api/projects/5/changes': Response.json(
+          { number: 14, url: 'https://github.com/x/14' },
+          { status: 201 },
+        ),
+      },
+    );
+    renderProject();
+    const pane = await screen.findByRole('region', { name: 'Changes' });
+    expect(within(pane).getByRole('link', { name: '#12 Move to the app layout' })).toHaveAttribute(
+      'href',
+      '/p/12',
+    );
+    expect(within(pane).getByRole('img', { name: 'Waiting for you' })).toBeInTheDocument();
+    expect(within(pane).getByRole('img', { name: 'Shipped' })).toBeInTheDocument();
+
+    await user.click(within(pane).getByRole('button', { name: 'Request a change' }));
+    const dialog = screen.getByRole('dialog', { name: 'Request a change' });
+    await user.click(within(dialog).getByRole('button', { name: 'File change' }));
+    expect(within(dialog).getByText('Say what should change.')).toBeInTheDocument();
+    expect(sent).toHaveLength(0);
+    await user.type(within(dialog).getByLabelText('Title'), 'Dark mode first');
+    await user.type(
+      within(dialog).getByLabelText('What should change'),
+      'Open in dark on dark systems.',
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'File change' }));
+    expect(sent[0]).toMatchObject({
+      path: '/api/projects/5/changes',
+      body: { title: 'Dark mode first', change: 'Open in dark on dark systems.', approve: false },
+    });
+  });
+
+  it('offers no change requests before the product is live, nor to visitors', async () => {
+    mockApi({ '/api/projects/5': READY });
+    renderProject();
+    const pane = await screen.findByRole('region', { name: 'Changes' });
+    expect(pane).toHaveTextContent('once the product is live');
+    expect(
+      within(pane).queryByRole('button', { name: 'Request a change' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("a change's page names its product and its spec", async () => {
+    mockApi({
+      '/api/projects/5': makeDetail({
+        kind: 'change',
+        parent: 1,
+        name: 'Move to the app layout',
+        productRepo: 'yangxdev/opt-out-log',
+        blueprintUrl: 'https://github.com/yangxdev/opt-out-log/blob/main/changes/5.md',
+      }),
+    });
+    renderProject(VISITOR);
+    expect(await screen.findByRole('link', { name: '#1' })).toHaveAttribute('href', '/p/1');
+    expect(screen.getByText(/change #5/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /change spec/ })).toHaveAttribute(
+      'href',
+      'https://github.com/yangxdev/opt-out-log/blob/main/changes/5.md',
+    );
+    expect(screen.queryByRole('region', { name: 'Changes' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Request' })).toBeInTheDocument();
+  });
+});

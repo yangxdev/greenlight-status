@@ -1,5 +1,6 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import type {
+  NewChange,
   NewIdea,
   NewIdeaResponse,
   ProjectAction,
@@ -35,6 +36,17 @@ export const addComment = createAsyncThunk(
   async ({ number, body }: { number: number; body: string }, { dispatch }) => {
     await apiPost(`/projects/${number}/comments`, { body });
     void dispatch(fetchProject(number));
+  },
+);
+
+/** A change to a live product, filed under it; then the product and the board reread. */
+export const createChange = createAsyncThunk(
+  'project/createChange',
+  async ({ parent, change }: { parent: number; change: NewChange }, { dispatch }) => {
+    const created = await apiPost<NewIdeaResponse>(`/projects/${parent}/changes`, change);
+    void dispatch(fetchProject(parent));
+    void dispatch(fetchStatus());
+    return created;
   },
 );
 

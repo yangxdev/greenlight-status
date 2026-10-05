@@ -6,7 +6,7 @@ import type { Env } from '../env.ts';
 import type { RouteContext } from '../router.ts';
 import { resetStatusCache } from '../status/cache.ts';
 import { login, makeCallback, me } from './auth.ts';
-import { ideaBody, makeWriteRoutes, validateIdea } from './write.ts';
+import { changeBody, ideaBody, makeWriteRoutes, validateChange, validateIdea } from './write.ts';
 
 const ORIGIN = 'https://greenlight-status.example.workers.dev';
 const env = {
@@ -307,5 +307,74 @@ describe('writes', () => {
     );
     expect(res.status).toBe(401);
     expect(res.headers.get('set-cookie')).toContain(`${SESSION_COOKIE}=;`);
+  });
+});
+
+describe('requesting a change', () => {
+  const CHANGE = {
+    title: 'Move to the app layout',
+    change: 'The board first.',
+    why: '',
+    keep: 'All data.',
+    approve: true,
+  };
+  const product = (labels: string[]) =>
+    Response.json({
+      number: 5,
+      title: '[idea] x',
+      state: 'open',
+      labels: labels.map((name) => ({ name })),
+    });
+
+  it('files a change sub-issue under a live product, approved when asked', async () => {
+    const api = fakeApi({
+      'GET /repos/yangxdev/greenlight/issues/5': product(['live']),
+      'POST /repos/yangxdev/greenlight/issues': Response.json(
+        { id: 999, number: 12, html_url: 'https://github.com/yangxdev/greenlight/issues/12' },
+        { status: 201 },
+      ),
+    });
+    const { createChange } = makeWriteRoutes(api.fetchImpl);
+    const res = await createChange(
+      ctx('/api/projects/5/changes', post(CHANGE, await sessionCookie('yangxdev')), {
+        number: '5',
+      }),
+    );
+    expect(res.status).toBe(201);
+    const [, create, link, approve] = api.calls;
+    expect(create?.body).toMatchObject({
+      title: '[change] Move to the app layout',
+      labels: ['change'],
+    });
+    const body = (create?.body as { body: string }).body;
+    expect(body).toContain('### Product issue\n\n#5');
+    expect(body).toContain('### Why\n\n_No response_');
+    expect(body).toContain('<!-- greenlight:parent=5 -->');
+    expect(link).toMatchObject({
+      url: 'https://api.github.com/repos/yangxdev/greenlight/issues/5/sub_issues',
+      body: { sub_issue_id: 999 },
+    });
+    expect(approve).toMatchObject({
+      url: 'https://api.github.com/repos/yangxdev/greenlight/issues/12/labels',
+      body: { labels: ['approved'] },
+    });
+  });
+
+  it('refuses a product that is not live, and a change without content', async () => {
+    const owner = await sessionCookie('yangxdev');
+    const early = makeWriteRoutes(
+      fakeApi({ 'GET /repos/yangxdev/greenlight/issues/5': product(['building']) }).fetchImpl,
+    );
+    expect(
+      (
+        await early.createChange(
+          ctx('/api/projects/5/changes', post(CHANGE, owner), { number: '5' }),
+        )
+      ).status,
+    ).toBe(409);
+    expect(validateChange({ ...CHANGE, change: '' })).toEqual({ error: 'Say what should change.' });
+    expect(changeBody(5, { ...CHANGE, keep: '' })).toContain(
+      '### Must not change\n\n_No response_',
+    );
   });
 });

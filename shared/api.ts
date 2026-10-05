@@ -16,6 +16,7 @@ export const IDEA_STATES = [
   'blueprint-ok',
   'building',
   'live',
+  'shipped',
   'stuck',
   'archived',
 ] as const;
@@ -74,9 +75,26 @@ export type Attention = 'approve' | 'blueprint-ok' | 'stuck';
 
 export type Verdict = 'keep' | 'improve' | 'archive';
 
+/** One change to a live product, as its product's tile and page list it. */
+export interface ChangeSummary {
+  number: number;
+  /** Title without the "[change] " prefix. */
+  name: string;
+  url: string;
+  states: IdeaState[];
+  closed: boolean;
+  current: StageId;
+  attention: Attention | null;
+  updatedAt: string;
+}
+
 export interface ProjectSummary {
   number: number;
-  /** Title without the "[idea] " prefix. */
+  /** An idea (a product) or a change to a live product (a sub-issue of its idea issue). */
+  kind: 'idea' | 'change';
+  /** For a change: its product's idea issue. */
+  parent: number | null;
+  /** Title without the "[idea] " or "[change] " prefix. */
   name: string;
   /** Issue html_url. */
   url: string;
@@ -100,6 +118,8 @@ export interface ProjectSummary {
   reason: string | null;
   /** The Critic's total for a card with the same name, if one was scored. */
   score: { total: number; date: string; url: string } | null;
+  /** For an idea: its changes, open ones first, newest first. Empty for a change. */
+  changes: ChangeSummary[];
 }
 
 export interface CriticRow {
@@ -140,7 +160,7 @@ export interface StatusResponse {
   filedThreshold: number;
   /** Ten entries, in STAGES order. */
   stages: PipelineStage[];
-  /** Newest issue first. */
+  /** Ideas only, newest issue first; each carries its changes. */
   projects: ProjectSummary[];
   /** Critic runs, newest first; runs without a valid table are omitted. */
   runs: CriticRun[];
@@ -211,6 +231,16 @@ export interface NewIdea {
 export interface NewIdeaResponse {
   number: number;
   url: string;
+}
+
+/** POST /api/projects/:number/changes: a change to that live product, filed as its sub-issue. */
+export interface NewChange {
+  title: string;
+  change: string;
+  why: string;
+  keep: string;
+  /** Add `approved` right after filing, which starts the Architect on it. */
+  approve: boolean;
 }
 
 /** POST /api/projects/:number/actions */
