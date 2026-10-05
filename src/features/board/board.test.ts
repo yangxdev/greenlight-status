@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectSummary } from '../../../shared/api.ts';
 import { makeProject, makeSteps } from '../../test/status.ts';
-import { describeProject, matchesFilter, matchesQuery, sortProjects } from './board.ts';
+import {
+  describeProject,
+  matchesFilter,
+  matchesQuery,
+  sortProjects,
+  waitingByStage,
+} from './board.ts';
 
 describe('describeProject', () => {
   it('says what the project waits for, with the accent only where you are needed', () => {
@@ -86,6 +92,24 @@ describe('changes on the board', () => {
     });
     expect(matchesFilter(p, 'needs-you')).toBe(true);
     expect(matchesFilter(p, 'live')).toBe(true);
+  });
+
+  it('lists what waits for you at each gate, ideas and changes alike, archived left out', () => {
+    const idea = makeProject({ number: 5, name: 'new-thing' });
+    const p = {
+      ...live,
+      name: 'opt-out-log',
+      changes: [change(10, 'approve'), change(11, 'stuck')],
+    };
+    const reviewing = makeProject({ number: 7, name: 'blue', attention: 'blueprint-ok' });
+    const gone = makeProject({ number: 3, states: ['archived'] });
+    expect(waitingByStage([idea, p, reviewing, gone])).toEqual({
+      board: [
+        { number: 5, name: 'new-thing', product: null, attention: 'approve' },
+        { number: 10, name: 'c10', product: 'opt-out-log', attention: 'approve' },
+      ],
+      reviewer: [{ number: 7, name: 'blue', product: null, attention: 'blueprint-ok' }],
+    });
   });
 
   it('a change being built keeps its product live, and a stuck change sorts first', () => {

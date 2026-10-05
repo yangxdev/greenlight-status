@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { STAGES, type PipelineStage, type StageId } from '../../../shared/api.ts';
 import {
   Drawer,
@@ -12,7 +13,14 @@ import {
   linkClass,
 } from '../../components/ui/index.ts';
 import { ago, formatUpdated } from '../../lib/format.ts';
-import { RUN_TONE, RUN_WORDS, STAGE_ABOUT, stageName } from './board.ts';
+import {
+  GATE_ACTION,
+  RUN_TONE,
+  RUN_WORDS,
+  STAGE_ABOUT,
+  stageName,
+  type GateItem,
+} from './board.ts';
 
 /** The pipeline from above: ten numbered cells, each with its last run. A cell opens that stage's recent runs. */
 export function StageStrip({
@@ -22,11 +30,12 @@ export function StageStrip({
 }: {
   stages: readonly PipelineStage[];
   now: string;
-  /** How many projects wait for you at the stage with the gate: the Board (approve) and the Reviewer (build). */
-  waiting: Partial<Record<StageId, number>>;
+  /** What waits for you at the stage with the gate: the Board (approve) and the Reviewer (build). */
+  waiting: Partial<Record<StageId, GateItem[]>>;
 }) {
   const [open, setOpen] = useState<StageId | null>(null);
   const selected = stages.find((s) => s.id === open) ?? null;
+  const gated = selected ? (waiting[selected.id] ?? []) : [];
 
   return (
     <>
@@ -37,7 +46,7 @@ export function StageStrip({
         {STAGES.map(({ id, index, name }) => {
           const stage = stages.find((s) => s.id === id);
           const last = stage?.runs[0];
-          const count = waiting[id] ?? 0;
+          const count = waiting[id]?.length ?? 0;
           return (
             <li key={id} className="bg-canvas">
               <button
@@ -87,6 +96,37 @@ export function StageStrip({
         {selected ? (
           <div className="space-y-6">
             <p className="text-small text-ink-soft">{STAGE_ABOUT[selected.id]}</p>
+            {gated.length > 0 ? (
+              <div>
+                <h3 className={labelClass}>Waiting for you</h3>
+                <RuledList className="mt-3">
+                  {gated.map((item) => (
+                    <RuledItem
+                      key={item.number}
+                      className="py-3 sm:py-3 md:grid-cols-[minmax(0,1fr)_auto]"
+                      aside={
+                        <span className="flex items-center gap-2 font-mono text-note text-muted">
+                          <StatusDot tone="attention" label={GATE_ACTION[item.attention]} />
+                          <span aria-hidden="true">{GATE_ACTION[item.attention]}</span>
+                        </span>
+                      }
+                    >
+                      <Link
+                        to={`/p/${item.number}`}
+                        onClick={() => setOpen(null)}
+                        className={`${linkClass} text-small`}
+                      >
+                        {item.name}
+                      </Link>
+                      <p className="mt-1 font-mono text-note text-muted tnum">
+                        #{item.number}
+                        {item.product ? ` · change to ${item.product}` : ' · idea'}
+                      </p>
+                    </RuledItem>
+                  ))}
+                </RuledList>
+              </div>
+            ) : null}
             {selected.runs.length > 0 ? (
               <div>
                 <h3 className={labelClass}>Recent</h3>

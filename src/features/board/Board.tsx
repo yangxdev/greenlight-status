@@ -14,6 +14,7 @@ import {
   matchesFilter,
   matchesQuery,
   sortProjects,
+  waitingByStage,
   type Filter,
 } from './board.ts';
 import { ProjectTile } from './ProjectTile.tsx';
@@ -34,11 +35,7 @@ function BoardView({ data, onNewIdea }: { data: StatusResponse; onNewIdea?: () =
   const shown = sorted.filter((p) => matchesFilter(p, filter) && matchesQuery(p, query));
   const needsYou = data.projects.filter((p) => matchesFilter(p, 'needs-you')).length;
   // Gates waiting, on ideas and on their changes alike.
-  const gates = data.projects.flatMap((p) => [p.attention, ...p.changes.map((c) => c.attention)]);
-  const waiting = {
-    board: gates.filter((a) => a === 'approve').length,
-    reviewer: gates.filter((a) => a === 'blueprint-ok').length,
-  };
+  const waiting = useMemo(() => waitingByStage(data.projects), [data.projects]);
 
   return (
     <>

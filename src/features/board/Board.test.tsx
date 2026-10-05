@@ -84,6 +84,39 @@ describe('Board', () => {
     expect(within(dialog).getByRole('link', { name: 'All runs on GitHub' })).toBeInTheDocument();
   });
 
+  it('opens the Board stage to show what needs you there, linking to each', async () => {
+    const user = userEvent.setup();
+    const live = makeProject({
+      number: 1,
+      name: 'opt-out-log',
+      attention: null,
+      states: ['live'],
+      current: 'observer',
+      changes: [
+        {
+          number: 10,
+          name: 'Move opt-out-log to the app layout',
+          url: 'https://github.com/yangxdev/greenlight/issues/10',
+          states: ['idea'],
+          closed: false,
+          current: 'board',
+          attention: 'approve',
+          updatedAt: '2026-10-02T10:00:00.000Z',
+        },
+      ],
+    });
+    renderBoard(makeStatus({ projects: [live] }));
+    const strip = screen.getByRole('list', { name: 'Pipeline stages' });
+    await user.click(within(strip).getByRole('button', { name: /Board/ }));
+    const dialog = screen.getByRole('dialog', { name: 'Board' });
+    expect(within(dialog).getByRole('heading', { name: 'Waiting for you' })).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('link', { name: 'Move opt-out-log to the app layout' }),
+    ).toHaveAttribute('href', '/p/10');
+    expect(within(dialog).getByText('#10 · change to opt-out-log')).toBeInTheDocument();
+    expect(within(dialog).getByRole('img', { name: 'Approve' })).toBeInTheDocument();
+  });
+
   it('offers "New idea" to the owner only', () => {
     const { unmount } = renderBoard(makeStatus(), VISITOR);
     expect(screen.queryByRole('button', { name: 'New idea' })).not.toBeInTheDocument();

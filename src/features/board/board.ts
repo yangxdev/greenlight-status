@@ -77,6 +77,46 @@ export function changeNeedingYou(p: ProjectSummary): ChangeSummary | null {
   );
 }
 
+/** One idea or change waiting at a gate, as the stage drawer lists it. */
+export interface GateItem {
+  number: number;
+  name: string;
+  /** For a change: its product's name. */
+  product: string | null;
+  attention: 'approve' | 'blueprint-ok';
+}
+
+/** The stage that holds each gate: the Board approves, the Reviewer's blueprint starts the build. */
+export const GATE_STAGE: Record<GateItem['attention'], StageId> = {
+  approve: 'board',
+  'blueprint-ok': 'reviewer',
+};
+
+export const GATE_ACTION: Record<GateItem['attention'], string> = {
+  approve: 'Approve',
+  'blueprint-ok': 'Start the build',
+};
+
+/** Ideas and changes waiting for you, grouped by the stage that holds their gate. Archived products are left out. */
+export function waitingByStage(
+  projects: readonly ProjectSummary[],
+): Partial<Record<StageId, GateItem[]>> {
+  const out: Partial<Record<StageId, GateItem[]>> = {};
+  const add = (item: GateItem) => (out[GATE_STAGE[item.attention]] ??= []).push(item);
+  for (const p of projects) {
+    if (p.states.includes('archived')) continue;
+    if (p.attention === 'approve' || p.attention === 'blueprint-ok') {
+      add({ number: p.number, name: p.name, product: null, attention: p.attention });
+    }
+    for (const c of p.changes) {
+      if (c.attention === 'approve' || c.attention === 'blueprint-ok') {
+        add({ number: c.number, name: c.name, product: p.name, attention: c.attention });
+      }
+    }
+  }
+  return out;
+}
+
 /** A project, or one of its changes, needs you. */
 export const needsYou = (p: ProjectSummary) => p.attention !== null || changeNeedingYou(p) !== null;
 
