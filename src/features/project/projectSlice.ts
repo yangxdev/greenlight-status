@@ -21,13 +21,16 @@ export const fetchProject = createAsyncThunk('project/fetch', (number: number) =
   apiGet<ProjectDetail>(`/projects/${number}`),
 );
 
-/** A gate, a retry or archive, then both views reread so the new labels show. */
+/**
+ * A gate, a retry or archive, then both views reread so the new labels show. It settles only once the project is
+ * reread, so its button never comes back for the state it just left.
+ */
 export const runAction = createAsyncThunk(
   'project/action',
   async ({ number, action }: { number: number; action: ProjectAction }, { dispatch }) => {
     await apiPost(`/projects/${number}/actions`, { action });
-    void dispatch(fetchProject(number));
     void dispatch(fetchStatus());
+    await dispatch(fetchProject(number));
   },
 );
 
@@ -35,7 +38,7 @@ export const addComment = createAsyncThunk(
   'project/comment',
   async ({ number, body }: { number: number; body: string }, { dispatch }) => {
     await apiPost(`/projects/${number}/comments`, { body });
-    void dispatch(fetchProject(number));
+    await dispatch(fetchProject(number));
   },
 );
 

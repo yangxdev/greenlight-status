@@ -77,6 +77,42 @@ describe('Project', () => {
     );
   });
 
+  it('keeps the gate button busy until the project is reread, then drops it', async () => {
+    const user = userEvent.setup();
+    const routes: Record<string, unknown> = {
+      '/api/projects/5': READY,
+      '/api/status': makeStatus(),
+    };
+    const { sent, spy } = mockApi(routes);
+    renderProject();
+    const start = await screen.findByRole('button', { name: 'Start the build' });
+
+    // The reread after the action hangs until released, and then answers with the new state.
+    let release!: () => void;
+    const reread = new Promise<void>((resolve) => (release = resolve));
+    const serve = spy.getMockImplementation()!;
+    spy.mockImplementation(async (input, init) => {
+      if (String(input) === '/api/projects/5') {
+        await reread;
+        return Response.json(
+          makeDetail({ states: ['building'], attention: null, current: 'factory' }),
+        );
+      }
+      return serve(input, init);
+    });
+
+    await user.click(start);
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(screen.getByRole('button', { name: 'Sending…' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Start the build' })).not.toBeInTheDocument();
+
+    release();
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Sending…' })).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByRole('button', { name: 'Start the build' })).not.toBeInTheDocument();
+  });
+
   it('asks before archiving, and shows GitHub refusing', async () => {
     const user = userEvent.setup();
     const { sent } = mockApi(
