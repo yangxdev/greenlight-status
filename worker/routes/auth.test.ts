@@ -6,7 +6,15 @@ import type { Env } from '../env.ts';
 import type { RouteContext } from '../router.ts';
 import { resetStatusCache } from '../status/cache.ts';
 import { login, makeCallback, me } from './auth.ts';
-import { changeBody, ideaBody, makeWriteRoutes, validateChange, validateIdea } from './write.ts';
+import {
+  changeBody,
+  ideaBody,
+  makeWriteRoutes,
+  noteBody,
+  validateChange,
+  validateIdea,
+  validateNote,
+} from './write.ts';
 
 const ORIGIN = 'https://greenlight-status.example.workers.dev';
 const env = {
@@ -222,6 +230,110 @@ describe('writes', () => {
     expect(ideaBody({ ...IDEA, signals: 'https://news.ycombinator.com/item?id=1' })).toContain(
       '### Signals / sources\n\nhttps://news.ycombinator.com/item?id=1',
     );
+  });
+
+  const NOTES_ISSUE = 'POST /repos/yangxdev/greenlight/issues';
+  const created = () =>
+    Response.json(
+      { number: 21, html_url: 'https://github.com/yangxdev/greenlight/issues/21' },
+      { status: 201 },
+    );
+
+  it('CH1: files a note as the owner with the title, label and body the Scribe reads', async () => {
+    const api = fakeApi({ [NOTES_ISSUE]: created() });
+    const { createNote } = makeWriteRoutes(api.fetchImpl);
+    const note = 'Bike shops keep paper cards\nso nobody knows…';
+    const res = await createNote(
+      ctx(
+        '/api/notes',
+        post(
+          { kind: 'Idea', note, links: 'https://a.example\n\n  https://b.example ' },
+          await sessionCookie('yangxdev'),
+        ),
+      ),
+    );
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({
+      number: 21,
+      url: 'https://github.com/yangxdev/greenlight/issues/21',
+    });
+    expect(api.calls).toHaveLength(1);
+    expect(api.calls[0]).toMatchObject({
+      method: 'POST',
+      url: 'https://api.github.com/repos/yangxdev/greenlight/issues',
+      auth: 'Bearer user-token',
+      body: {
+        title: '[note] Bike shops keep paper cards',
+        labels: ['note'],
+        body: `### Kind\n\nIdea\n\n### Note\n\n${note}\n\n### Links\n\nhttps://a.example\nhttps://b.example`,
+      },
+    });
+  });
+
+  it('CH2: cuts the title to 60 characters, marks empty links and keeps the kind', async () => {
+    const api = fakeApi({ [NOTES_ISSUE]: created() });
+    const { createNote } = makeWriteRoutes(api.fetchImpl);
+    const long = `${'a'.repeat(59)} ${'b'.repeat(40)}`;
+    await createNote(
+      ctx(
+        '/api/notes',
+        post({ kind: 'Evidence', note: `\n  ${long}`, links: '' }, await sessionCookie('yangxdev')),
+      ),
+    );
+    const sent = api.calls[0]?.body as { title: string; body: string };
+    expect(sent.title).toBe(`[note] ${'a'.repeat(59)}`);
+    expect(sent.body).toContain('### Kind\n\nEvidence\n\n');
+    expect(sent.body.endsWith('### Links\n\n_No response_')).toBe(true);
+    expect(noteBody({ kind: 'Idea', note: ' x ', links: ' \n ' })).toContain('### Note\n\nx\n');
+  });
+
+  it('CH3: refuses cross-site requests, missing sessions, strangers and an unconfigured Worker', async () => {
+    const api = fakeApi();
+    const { createNote } = makeWriteRoutes(api.fetchImpl);
+    const note = { kind: 'Idea', note: 'x', links: '' };
+    const owner = await sessionCookie('yangxdev');
+    const status = async (c: ReturnType<typeof ctx>) => (await createNote(c)).status;
+    expect(await status(ctx('/api/notes', post(note, owner, 'https://evil.example')))).toBe(403);
+    expect(await status(ctx('/api/notes', post(note)))).toBe(401);
+    expect(await status(ctx('/api/notes', post(note, await sessionCookie('stranger'))))).toBe(403);
+    expect(await status(ctx('/api/notes', post(note, owner), {}, {} as Env))).toBe(403);
+    expect(api.calls).toHaveLength(0);
+  });
+
+  it('CH4: rejects a blank note, another kind and over-long fields without calling GitHub', async () => {
+    const api = fakeApi();
+    const { createNote } = makeWriteRoutes(api.fetchImpl);
+    const owner = await sessionCookie('yangxdev');
+    const send = (body: unknown) => createNote(ctx('/api/notes', post(body, owner)));
+    expect((await send({ kind: 'Idea', note: '  \n ', links: '' })).status).toBe(400);
+    expect((await send({ kind: 'Bug', note: 'x', links: '' })).status).toBe(400);
+    expect((await send({ note: 'x' })).status).toBe(400);
+    expect((await send({ kind: 'Idea', note: 'x'.repeat(5001), links: '' })).status).toBe(400);
+    expect((await send({ kind: 'Idea', note: 'x', links: 'x'.repeat(5001) })).status).toBe(400);
+    expect(validateNote({ kind: 'Bug', note: 'x' })).toEqual({ error: 'Pick Idea or Evidence.' });
+    expect(validateNote({ kind: 'Idea', note: ' ' })).toEqual({ error: 'Write the note first.' });
+    expect(api.calls).toHaveLength(0);
+  });
+
+  it('CH5: answers GitHub failures as createIdea does', async () => {
+    const owner = await sessionCookie('yangxdev');
+    const note = { kind: 'Idea', note: 'x', links: '' };
+    const expired = makeWriteRoutes(
+      fakeApi({
+        [NOTES_ISSUE]: Response.json({ message: 'Bad credentials' }, { status: 401 }),
+      }).fetchImpl,
+    );
+    const res401 = await expired.createNote(ctx('/api/notes', post(note, owner)));
+    expect(res401.status).toBe(401);
+    expect(res401.headers.get('set-cookie')).toContain(`${SESSION_COOKIE}=;`);
+    const refused = makeWriteRoutes(
+      fakeApi({
+        [NOTES_ISSUE]: Response.json({ message: 'Validation Failed' }, { status: 422 }),
+      }).fetchImpl,
+    );
+    const res422 = await refused.createNote(ctx('/api/notes', post(note, owner)));
+    expect(res422.status).toBe(502);
+    expect(await res422.json()).toEqual({ error: 'GitHub refused: Validation Failed' });
   });
 
   const issue = (labels: string[], state = 'open') =>
