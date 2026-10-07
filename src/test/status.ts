@@ -15,7 +15,8 @@ export function makeStatus(overrides: Partial<StatusResponse> = {}): StatusRespo
     fetchedAt: '2026-10-03T10:00:00.000Z',
     stale: false,
     filedThreshold: 14,
-    stages: STAGES.map(({ id }) => ({ id, runs: [], workflowUrl: null })),
+    stages: STAGES.map(({ id }) => ({ id, runs: [], workflowUrl: null, usage: null })),
+    usageSince: '2026-09-03T10:00:00.000Z',
     projects: [],
     runs: [],
     watchlist: [],
@@ -31,6 +32,7 @@ export function makeSteps(upTo: number, status: StepStatus = 'done') {
     stage: id,
     status: i < upTo ? ('done' as const) : i === upTo ? status : ('pending' as const),
     at: i <= upTo ? '2026-10-02T10:00:00.000Z' : null,
+    usage: null,
   }));
 }
 
@@ -55,6 +57,7 @@ export function makeProject(overrides: Partial<ProjectSummary> = {}): ProjectSum
     reason: null,
     score: null,
     changes: [],
+    usage: null,
     ...overrides,
   };
 }

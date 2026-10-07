@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import type { StatusResponse } from '../../../shared/api.ts';
+import { USAGE_WINDOW_DAYS, type StatusResponse } from '../../../shared/api.ts';
 import { useAppSelector } from '../../app/hooks.ts';
 import { ViewHeader } from '../../components/shell/index.ts';
 import { Button, EmptyState, Note, Segmented, inputClass } from '../../components/ui/index.ts';
@@ -83,10 +83,22 @@ function BoardView({
 
       <div className="space-y-8 px-edge py-6">
         <section aria-labelledby="stages-heading" className="space-y-3">
-          <h2 id="stages-heading" className="font-mono text-label uppercase text-muted">
-            Stages
-          </h2>
-          <StageStrip stages={data.stages} now={data.fetchedAt} waiting={waiting} />
+          <div className="flex items-baseline justify-between gap-4">
+            <h2 id="stages-heading" className="font-mono text-label uppercase text-muted">
+              Stages
+            </h2>
+            {data.stages.some((s) => s.usage) ? (
+              <p className="font-mono text-note text-muted">
+                Tokens: last {USAGE_WINDOW_DAYS} days
+              </p>
+            ) : null}
+          </div>
+          <StageStrip
+            stages={data.stages}
+            now={data.fetchedAt}
+            usageSince={data.usageSince}
+            waiting={waiting}
+          />
         </section>
 
         <section aria-labelledby="projects-heading" className="space-y-4">

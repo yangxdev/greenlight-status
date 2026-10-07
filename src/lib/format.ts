@@ -24,3 +24,18 @@ export function ago(iso: string | null, reference: string): string {
   if (days < 14) return `${days}d`;
   return new Date(then).toISOString().slice(0, 10);
 }
+
+/** 950 → "950", 12_345 → "12.3k", 840_000 → "840k", 3_900_000 → "3.9M": token counts at a glance. */
+export function formatTokens(n: number): string {
+  const short = (value: number, unit: string) =>
+    `${value >= 100 ? Math.round(value) : Number(value.toFixed(1))}${unit}`;
+  if (n < 1000) return String(Math.round(n));
+  if (n < 999_500) return short(n / 1000, 'k');
+  return short(n / 1_000_000, 'M');
+}
+
+/** 3.1234 → "$3.12", 0.004 → "<$0.01". */
+export function formatUsd(n: number): string {
+  if (n > 0 && n < 0.01) return '<$0.01';
+  return `$${n.toFixed(2)}`;
+}

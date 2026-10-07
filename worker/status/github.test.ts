@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { buildStatus } from './github.ts';
 import { API, baseRoutes, fakeGithub, json, RAW, TABLE } from './fixtures.ts';
 
@@ -153,6 +153,67 @@ describe('buildStatus', () => {
         status: 'success',
         url: 'https://github.com/c/3',
       });
+    });
+
+    it("adds up each stage's usage over the last 30 days, from comments and the review files", async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-10-03T00:00:00Z'));
+      try {
+        const usage = (stage: string, input: number) =>
+          `<!-- greenlight:usage stage=${stage} in=${input} out=0 cache_read=0 cache_write=0 turns=1 cost=0 -->`;
+        const r = routes();
+        const feed = (await (r[COMMENTS] as Response).clone().json()) as unknown[];
+        r[COMMENTS] = json([
+          // The Observer reports on its own tracking issue, which is not a project.
+          {
+            issue_url: `${API}/issues/2`,
+            body: `**Observer, 2026-W40:** fine\n\n${usage('observer', 30)}`,
+            created_at: '2026-09-29T00:00:00Z',
+            user: { login: 'github-actions[bot]' },
+            html_url: 'https://github.com/c/5',
+          },
+          {
+            issue_url: `${API}/issues/9`,
+            body: `**Factory:** PR opened\n\n${usage('factory', 500)}`,
+            created_at: '2026-09-20T00:00:00Z',
+            user: { login: 'github-actions[bot]' },
+            html_url: 'https://github.com/c/4',
+          },
+          // Older than the window: on the project, not on the strip.
+          {
+            issue_url: `${API}/issues/9`,
+            body: `**Factory:** PR opened\n\n${usage('factory', 7)}`,
+            created_at: '2026-08-01T00:00:00Z',
+            user: { login: 'github-actions[bot]' },
+            html_url: 'https://github.com/c/0',
+          },
+          // Anyone can comment on a public issue: no say in the figures.
+          {
+            issue_url: `${API}/issues/9`,
+            body: usage('factory', 99999),
+            created_at: '2026-09-21T00:00:00Z',
+            author_association: 'NONE',
+            user: { login: 'someone' },
+            html_url: 'https://github.com/c/x',
+          },
+          ...feed,
+        ]);
+        r[`${RAW}/analysis/2026-10-02-critic.md`] = new Response(
+          `${TABLE}\n${usage('analyst', 40)}\n${usage('critic', 60)}\n`,
+        );
+        const status = await buildStatus(env, fakeGithub(r).fetchImpl);
+        const by = Object.fromEntries(status.stages.map((s) => [s.id, s.usage]));
+        expect(status.usageSince).toBe('2026-09-03T00:00:00.000Z');
+        expect(by.factory).toMatchObject({ input: 500, runs: 1 });
+        expect(by.observer).toMatchObject({ input: 30, runs: 1 });
+        expect(by.analyst).toMatchObject({ input: 40 });
+        expect(by.critic).toMatchObject({ input: 60 });
+        expect(by.scout).toBeNull();
+        expect(status.runs[0]?.rows).toHaveLength(2);
+        expect(status.projects[0]?.usage).toMatchObject({ input: 507, runs: 2 });
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('still builds when the comment feed and the runs fail', async () => {
