@@ -1,60 +1,60 @@
 # Build report
 
-- **Blueprint:** blueprint.md @ 8fa348b
-- **Greenlight issue:** yangxdev/greenlight#5
-- **Run:** https://github.com/yangxdev/greenlight-status/actions/runs/37131071625
+- **Blueprint:** blueprint.md @ b64f0f5 (change spec changes/15.md)
+- **Greenlight issue:** yangxdev/greenlight#15
+- **Run:** https://github.com/yangxdev/greenlight-status/actions/runs/37608166352
 - **Result:** ✅ complete
 
 ## Tasks
 
 | # | Task | Status | Commit | Notes |
 |---|------|--------|--------|-------|
-| 1 | Shared types and the markdown/issue parsers | done | 75772a2 | |
-| 2 | GitHub reader and assembler | done | 8653fa6 | `worker/status/fixtures.ts` is a test helper (fake GitHub) shared by two test files |
-| 3 | `/api/status` route and cache | done | 3dd8ee8 | |
-| 4 | Client state for the status document | done | d4b654d | `apiGet` now surfaces the server's `{ error }` message |
-| 5 | Identity, routing and Overview | done | e5156de | `SiteHeader` uses router links and shows its nav on phones too |
-| 6 | Ideas screen | done | d392c4e | |
-| 7 | README and polish | done | 4e1afd6 | `src/App.test.tsx` (AC28) was written with tasks 5 and 6; README committed as `docs: readme` |
+| 1 | Note route in the Worker | done | eb01548 | `POST /api/notes`, `validateNote`, `noteBody`, shared types. The `MVP` heading and error rename were also made here, since they sit in the same file; Task 2 holds their tests. |
+| 2 | Keep notes out of the board, rename MVP on the server | done | fb676c8 | Tests for the parser, the status build and the MVP heading and message. |
+| 3 | Quick note drawer | done | 1d1f984 | `createNote` thunk, `QuickNoteDrawer`, tests. |
+| 4 | Wire the action and rename the field | done | 5374ef4 | Quick note button and drawer on the Pipeline view (owner only); the New idea field is now **MVP**. |
+
+README updated in 043b0ce.
 
 ## Acceptance criteria
 
 | Criterion | Covered by test | Status |
 |-----------|-----------------|--------|
-| AC1–AC3 | `worker/status/parse.test.ts` › `parseCriticTable` | pass |
-| AC4 | `worker/status/parse.test.ts` › `parseIdeaIssues` | pass |
-| AC5 | `worker/status/parse.test.ts` › `parseWatchlist` | pass |
-| AC6 | `worker/status/parse.test.ts` › `findRepoMarker and parseReport` | pass |
-| AC7–AC11 | `worker/status/github.test.ts` | pass |
-| AC12–AC15 | `worker/status/cache.test.ts`; 503 route check in `worker/worker.test.ts` (health still covered there) | pass |
-| AC16–AC18 | `src/features/status/statusSlice.test.ts` | pass |
-| AC19–AC23 | `src/features/status/Overview.test.tsx` | pass |
-| AC24–AC27 | `src/features/status/Ideas.test.tsx` | pass |
-| AC28 | `src/App.test.tsx` | pass |
+| CH1 | `worker/routes/auth.test.ts` › "CH1: files a note as the owner…" | pass |
+| CH2 | `worker/routes/auth.test.ts` › "CH2: cuts the title to 60 characters…" | pass |
+| CH3 | `worker/routes/auth.test.ts` › "CH3: refuses cross-site requests…" | pass |
+| CH4 | `worker/routes/auth.test.ts` › "CH4: rejects a blank note…" | pass |
+| CH5 | `worker/routes/auth.test.ts` › "CH5: answers GitHub failures as createIdea does" | pass |
+| CH6 | `worker/status/parse.test.ts` › "CH6: ignores an open [note] issue…"; `worker/status/cache.test.ts` › "CH6: leaves a [note] issue out…" | pass |
+| CH7 | `worker/routes/auth.test.ts` › "CH7: writes the MVP heading…" | pass |
+| CH8 | Existing `createIdea` (approve → label `idea` + `approved`, 201), changes, actions, comments and health tests, unchanged | pass |
+| CH9 | `QuickNoteDrawer.test.tsx` › "CH9: opens on Idea…" | pass |
+| CH10 | `QuickNoteDrawer.test.tsx` › "CH10: asks for the note…" | pass |
+| CH11 | `QuickNoteDrawer.test.tsx` › "CH11: files an idea note…" and "CH11: says evidence…" | pass |
+| CH12 | `QuickNoteDrawer.test.tsx` › "CH12: keeps the note on an error…" | pass |
+| CH13 | `Board.test.tsx` › "CH13: offers Quick note…" | pass |
+| CH14 | `NewIdeaDrawer.test.tsx` › "CH14: labels the field MVP…" | pass |
+| CH15 | `NewIdeaDrawer.test.tsx` › "files the idea, approved if asked, and opens its page" (label now `MVP`) | pass |
 
 ## Checks (last run of `npm run check`)
 
-- lint: pass (ESLint, Prettier, style guard)
-- test: pass (57 tests)
-- build: pass (bundle size: 98.46 kB gzip JS)
+- lint: pass
+- test: pass (137 tests)
+- build: pass (bundle size: 106.67 kB gzip JS; the last full check ran before the final component edits, which add little)
 
 ## Deviations from the blueprint
 
-- The report JSON shape is not specified. `parseReport` assumes `{ week, summary, products: [{ issue, verdict, reason }] }`; entries without a numeric `issue` or a valid `verdict` are dropped.
-- The watchlist bullet labels are matched loosely (a label containing "best", "evidence", "problem" or "need"), since the exact labels are unverified.
-- `/api/status` sends `cache-control: no-store` on the 503 as well as on success.
-- The old `HealthBadge` is no longer shown on the page (it is not in the blueprint); the component and `/api/health` remain.
+None. One existing test changed: `NewIdeaDrawer.test.tsx` now queries `MVP` instead of `MVP in one day`, because the change renames that label.
 
 ## New dependencies
 
-- `react-router` ^8.4.0: two screens (`/` and `/ideas`), approved in CLAUDE.md.
+None.
 
 ## Manual setup required before deploy
 
-- Optional: `npx wrangler secret put GITHUB_READ_TOKEN` (read-only token for public repos) to avoid GitHub's unauthenticated rate limit.
-- Turn on Cloudflare Web Analytics for the `*.workers.dev` hostname.
-- Both `yangxdev/greenlight-status` and `yangxdev/greenlight` must be public.
+- Merge greenlight's `claude/elegant-mendel-l8memg` branch and re-run its **Setup labels** workflow so the `note` label exists.
+- After deploy, file one Idea note and one Evidence note and check that `notes.yml` runs on each and the next-step text is accurate.
 
 ## Blockers / open questions
 
-- Unverified against the live repo, as the blueprint notes: the Critic table headers and `watchlist.md` bullet labels, the report JSON field names, the filed threshold of 14, and that the `greenlight:repo` marker and repo homepage are still written. Compare the live page with `analysis/` and `reports/` after the first deploy.
+None.
