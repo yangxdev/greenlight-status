@@ -3,6 +3,7 @@ import type {
   NewChange,
   NewIdea,
   NewIdeaResponse,
+  NewNote,
   ProjectAction,
   ProjectDetail,
 } from '../../../shared/api.ts';
@@ -60,6 +61,11 @@ export const createIdea = createAsyncThunk(
     void dispatch(fetchStatus());
     return created;
   },
+);
+
+/** A quick note becomes an issue the Scribe reads; it is not on the board, so nothing is reread. */
+export const createNote = createAsyncThunk('project/createNote', (note: NewNote) =>
+  apiPost<NewIdeaResponse>('/notes', note),
 );
 
 export const projectSlice = createSlice({

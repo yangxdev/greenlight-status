@@ -22,6 +22,27 @@ describe('getStatus', () => {
     expect(((await first.json()) as StatusResponse).fetchedAt).toBe(body.fetchedAt);
   });
 
+  it('CH6: leaves a [note] issue out of the projects until it is retitled [idea]', async () => {
+    const note = (title: string) => ({
+      number: 8,
+      title,
+      state: 'open',
+      labels: [{ name: 'note' }],
+      html_url: 'https://github.com/yangxdev/greenlight/issues/8',
+    });
+    const read = async (title: string) => {
+      resetStatusCache();
+      const routes = baseRoutes();
+      const issues = routes[`${API}/issues?state=all&per_page=100`] as Response;
+      const list = (await issues.clone().json()) as unknown[];
+      routes[`${API}/issues?state=all&per_page=100`] = json([...list, note(title)]);
+      const res = await getStatus(env, () => START, fakeGithub(routes).fetchImpl);
+      return ((await res.json()) as StatusResponse).projects;
+    };
+    expect((await read('[note] Bike shops')).map((p) => p.number)).toEqual([7]);
+    expect((await read('[idea] Bike shops')).map((p) => p.number).sort()).toEqual([7, 8]);
+  });
+
   it('AC13: serves the old copy as stale when GitHub fails after expiry', async () => {
     const routes = baseRoutes();
     const good = fakeGithub(routes);

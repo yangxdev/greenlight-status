@@ -233,6 +233,17 @@ export interface NewIdeaResponse {
   url: string;
 }
 
+export const NOTE_KINDS = ['Idea', 'Evidence'] as const;
+export type NoteKind = (typeof NOTE_KINDS)[number];
+
+/** POST /api/notes: the Quick note form's fields. */
+export interface NewNote {
+  kind: NoteKind;
+  note: string;
+  /** One link per line; may be "". */
+  links: string;
+}
+
 /** POST /api/projects/:number/changes: a change to that live product, filed as its sub-issue. */
 export interface NewChange {
   title: string;

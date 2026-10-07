@@ -1,10 +1,12 @@
-import type {
-  CommentRequest,
-  IdeaState,
-  NewChange,
-  NewIdea,
-  NewIdeaResponse,
-  ProjectAction,
+import {
+  NOTE_KINDS,
+  type CommentRequest,
+  type IdeaState,
+  type NewChange,
+  type NewIdea,
+  type NewIdeaResponse,
+  type NewNote,
+  type ProjectAction,
 } from '../../shared/api.ts';
 import { SESSION_COOKIE, cookie, readSession, type Session } from '../auth/session.ts';
 import { errorResponse, type Handler, type RouteContext } from '../router.ts';
@@ -113,7 +115,7 @@ export function validateIdea(body: Record<string, unknown>): { idea: NewIdea } |
     return { error: `Keep the name to one line of at most ${MAX_TITLE} characters.` };
   }
   if (!idea.problem || !idea.users || !idea.mvp) {
-    return { error: 'Problem, target users and the one-day MVP are required.' };
+    return { error: 'Problem, target users and the MVP are required.' };
   }
   const long = (['problem', 'users', 'mvp', 'competition', 'signals', 'nongoals'] as const).find(
     (k) => idea[k].length > MAX_FIELD,
@@ -129,11 +131,41 @@ export function ideaBody(idea: NewIdea): string {
   return [
     section('Problem', idea.problem),
     section('Target users', idea.users),
-    section('MVP in one day', idea.mvp),
+    section('MVP', idea.mvp),
     section('Existing alternatives', idea.competition),
     section('Signals / sources', idea.signals),
     section('Explicit non-goals', idea.nongoals),
   ].join('\n\n');
+}
+
+export function validateNote(body: Record<string, unknown>): { note: NewNote } | { error: string } {
+  const kind = NOTE_KINDS.find((k) => k === body.kind);
+  if (!kind) return { error: 'Pick Idea or Evidence.' };
+  const note: NewNote = { kind, note: text(body.note), links: text(body.links) };
+  if (!note.note) return { error: 'Write the note first.' };
+  if (note.note.length > MAX_FIELD || note.links.length > MAX_FIELD) {
+    return { error: `Keep each field under ${MAX_FIELD} characters.` };
+  }
+  return { note };
+}
+
+/** The markdown notes.yml reads: the same headings as a form, so the Scribe parses it like one. */
+export function noteBody(note: NewNote): string {
+  const links = note.links
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join('\n');
+  return [
+    `### Kind\n\n${note.kind}`,
+    `### Note\n\n${note.note.trim()}`,
+    `### Links\n\n${links || '_No response_'}`,
+  ].join('\n\n');
+}
+
+function noteTitle(note: string): string {
+  const first = note.split(/\r?\n/).find((l) => l.trim()) ?? '';
+  return `[note] ${first.trim().slice(0, MAX_TITLE).trim()}`;
 }
 
 export function validateChange(
@@ -199,6 +231,33 @@ export function makeWriteRoutes(fetchImpl: FetchLike = (i, init) => fetch(i, ini
       if (typeof created.number !== 'number') return errorResponse(502, 'GitHub sent no issue.');
       if (idea.approve) await applyGate(call, repo, created.number, 'approved', false);
       invalidate();
+      const res: NewIdeaResponse = {
+        number: created.number,
+        url: typeof created.html_url === 'string' ? created.html_url : '',
+      };
+      return Response.json(res, { status: 201 });
+    } catch (error) {
+      return failed(error);
+    }
+  };
+
+  /** POST /api/notes: a quick note (an idea or evidence) filed as an issue for notes.yml to pick up. */
+  const createNote: Handler = async (ctx) => {
+    const session = await requireOwner(ctx);
+    if (session instanceof Response) return session;
+    const body = await readBody(ctx.request);
+    if (!body) return errorResponse(400, 'Send the note as JSON.');
+    const checked = validateNote(body);
+    if ('error' in checked) return errorResponse(400, checked.error);
+    const { note } = checked;
+    const repo = resolveRepo(ctx.env);
+    try {
+      const created = (await asOwner(session, fetchImpl)('POST', `/repos/${repo}/issues`, {
+        title: noteTitle(note.note),
+        body: noteBody(note),
+        labels: ['note'],
+      })) as { number?: unknown; html_url?: unknown };
+      if (typeof created.number !== 'number') return errorResponse(502, 'GitHub sent no issue.');
       const res: NewIdeaResponse = {
         number: created.number,
         url: typeof created.html_url === 'string' ? created.html_url : '',
@@ -345,7 +404,8 @@ export function makeWriteRoutes(fetchImpl: FetchLike = (i, init) => fetch(i, ini
     }
   };
 
-  return { createIdea, createChange, projectAction, addComment };
+  return { createIdea, createNote, createChange, projectAction, addComment };
 }
 
-export const { createIdea, createChange, projectAction, addComment } = makeWriteRoutes();
+export const { createIdea, createNote, createChange, projectAction, addComment } =
+  makeWriteRoutes();

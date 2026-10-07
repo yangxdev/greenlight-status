@@ -103,12 +103,12 @@ export function NewIdeaDrawer({ open, onClose }: { open: boolean; onClose: () =>
           hint="The first 100 users, and where they hang out."
         />
         <TextArea
-          label="MVP in one day"
+          label="MVP"
           value={idea.mvp}
           onChange={(e) => set('mvp')(e.target.value)}
           error={missing.mvp}
           placeholder={'- Upload a glossary per client\n- Paste text, highlight its terms'}
-          hint="3–6 lines starting with “- ”."
+          hint="The smallest first version that proves the value"
         />
         <TextArea
           label="Existing alternatives"
