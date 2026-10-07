@@ -11,6 +11,7 @@ import {
   type StepStatus,
 } from '../../shared/api.ts';
 import type { IdeaIssue, ReportProduct } from './parse.ts';
+import { sumUsage, totalUsage } from './usage.ts';
 
 /** A comment on an issue of the pipeline repo, from the per-issue or the repo-wide comments endpoint. */
 export interface IssueComment {
@@ -148,21 +149,22 @@ export function deriveSteps(
   // A change skips the idea stages (it comes from you or the Observer) and the weekly report (its product has one).
   const fromCritic = issue.author === BOT && !change;
   const steps: ProjectStep[] = STAGES.map(({ id }) => {
-    if (change && id === 'observer') return { stage: id, status: 'skipped', at: null };
+    if (change && id === 'observer') return { stage: id, status: 'skipped', at: null, usage: null };
     if (id === 'scout' || id === 'analyst' || id === 'critic') {
       return fromCritic
-        ? { stage: id, status: 'done', at: issue.createdAt }
-        : { stage: id, status: 'skipped', at: null };
+        ? { stage: id, status: 'done', at: issue.createdAt, usage: null }
+        : { stage: id, status: 'skipped', at: null, usage: null };
     }
-    if (id === 'board') return { stage: id, status: 'done', at: issue.createdAt };
+    if (id === 'board') return { stage: id, status: 'done', at: issue.createdAt, usage: null };
     const event = last.get(id);
     return event
       ? {
           stage: id,
           status: eventStatus(event.text) === 'failure' ? 'stuck' : 'done',
           at: event.at,
+          usage: null,
         }
-      : { stage: id, status: 'pending', at: null };
+      : { stage: id, status: 'pending', at: null, usage: null };
   });
   const set = (id: StageId, status: StepStatus) => {
     const step = steps[at(id)];
@@ -245,6 +247,10 @@ export function summarizeProject(
   }
   const events = comments.flatMap(commentEvents);
   const { steps, current, attention } = deriveSteps(issue, events);
+  // Only the workflows' and the owner's comments count, like every other marker. The Analyst and Critic work for a
+  // whole week of ideas, so their usage shows on the stage strip, not on each idea they filed.
+  const usage = sumUsage(comments.filter((c) => c.trusted).map((c) => c.body));
+  for (const step of steps) step.usage = usage.get(step.stage) ?? null;
   const verdict = report.find((p) => p.issue === issue.number) ?? null;
   const key = slug(issue.name);
   let score: ProjectSummary['score'] = null;
@@ -275,6 +281,7 @@ export function summarizeProject(
     reason: verdict ? verdict.reason : null,
     score,
     changes: [],
+    usage: totalUsage(steps.map((s) => s.usage)),
   };
 }
 

@@ -4,6 +4,7 @@ import { StatusDot, labelClass } from '../../components/ui/index.ts';
 import { ago } from '../../lib/format.ts';
 import { describeProject } from './board.ts';
 import { StepBar } from './StepBar.tsx';
+import { tokensLabel } from './usage.ts';
 
 /** One project in the grid: number and state, name, the ten-stage bar, and what it is doing now. */
 export function ProjectTile({ project, now }: { project: ProjectSummary; now: string }) {
@@ -19,6 +20,7 @@ export function ProjectTile({ project, now }: { project: ProjectSummary; now: st
           <span className={`${labelClass} tnum`}>
             #{project.number} · {project.states.join(' + ')}
             {openChanges > 0 ? ` · ${openChanges} ${openChanges === 1 ? 'change' : 'changes'}` : ''}
+            {project.usage ? ` · ${tokensLabel(project.usage)}` : ''}
           </span>
           {project.score ? (
             <span className={`${labelClass} tnum`}>{project.score.total}/20</span>

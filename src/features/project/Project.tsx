@@ -24,6 +24,7 @@ import { formatUpdated } from '../../lib/format.ts';
 import { messageOf } from '../../lib/api.ts';
 import { describeProject, RUN_TONE, RUN_WORDS, STEP_TONE, STEP_WORDS } from '../board/board.ts';
 import { StepBar } from '../board/StepBar.tsx';
+import { tokensLabel, usageLine } from '../board/usage.ts';
 import { selectMe } from '../session/sessionSlice.ts';
 import { ChangeDrawer } from './ChangeDrawer.tsx';
 import { addComment, fetchProject, runAction, selectProject } from './projectSlice.ts';
@@ -77,6 +78,9 @@ function Stages({ project }: { project: ProjectDetail }) {
                 <span aria-hidden="true">{STEP_WORDS[status]}</span>
                 {step?.at && events.length === 0 ? <When at={step.at} /> : null}
               </p>
+              {step?.usage ? (
+                <p className="font-mono text-note text-muted tnum">{usageLine(step.usage)}</p>
+              ) : null}
               {id === 'critic' && project.score ? (
                 <p className="text-small text-ink-soft">
                   Scored{' '}
@@ -351,9 +355,26 @@ function ProjectView({ project, owner }: { project: ProjectDetail; owner: boolea
       </div>
 
       <div className="grid items-start gap-6 px-edge py-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <Pane label="Stages" flush>
-          <Stages project={project} />
-        </Pane>
+        <div className="space-y-3">
+          <Pane
+            label="Stages"
+            aside={
+              project.usage ? (
+                <span className="font-mono tnum">{tokensLabel(project.usage)}</span>
+              ) : undefined
+            }
+            flush
+          >
+            <Stages project={project} />
+          </Pane>
+          {project.usage ? (
+            <Note>
+              Tokens are what each Claude run reported: fresh input, cache reads and writes, and
+              output. Runs from before usage was recorded aren&rsquo;t counted. The API price is
+              what the same tokens would cost on the API; a subscription doesn&rsquo;t bill it.
+            </Note>
+          ) : null}
+        </div>
 
         <div className="space-y-6">
           {change ? null : <Changes project={project} owner={owner} />}

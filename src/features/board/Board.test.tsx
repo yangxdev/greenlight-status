@@ -43,6 +43,41 @@ describe('Board', () => {
     );
   });
 
+  it('shows the tokens each stage and each project used, with the breakdown in the stage drawer', async () => {
+    const user = userEvent.setup();
+    const usage = {
+      input: 120_000,
+      output: 45_000,
+      cacheRead: 3_900_000,
+      cacheWrite: 210_000,
+      turns: 80,
+      costUsd: 4.1235,
+      runs: 2,
+    };
+    const status = makeStatus({ projects: [makeProject({ usage })] });
+    status.stages = status.stages.map((s) => (s.id === 'factory' ? { ...s, usage } : s));
+    renderBoard(status);
+    expect(screen.getByText('Tokens: last 30 days')).toBeInTheDocument();
+    const strip = screen.getByRole('list', { name: 'Pipeline stages' });
+    // 120k + 45k + 3.9M + 210k
+    expect(within(strip).getByText('4.3M tokens')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /greenlight-status/ })).toHaveTextContent(
+      '4.3M tokens',
+    );
+
+    await user.click(within(strip).getByRole('button', { name: /Factory/ }));
+    const drawer = screen.getByRole('dialog', { name: 'Factory' });
+    expect(within(drawer).getByText('Usage since 2026-09-03')).toBeInTheDocument();
+    expect(within(drawer).getByText('3.9M')).toBeInTheDocument();
+    expect(within(drawer).getByText('2 (80 turns)')).toBeInTheDocument();
+    expect(within(drawer).getByText('$4.12')).toBeInTheDocument();
+  });
+
+  it('shows no token figures before any run recorded them', () => {
+    renderBoard(makeStatus({ projects: PROJECTS }));
+    expect(screen.queryByText(/tokens/i)).not.toBeInTheDocument();
+  });
+
   it('filters and searches', async () => {
     const user = userEvent.setup();
     renderBoard(makeStatus({ projects: PROJECTS }));

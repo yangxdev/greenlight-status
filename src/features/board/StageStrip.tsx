@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { STAGES, type PipelineStage, type StageId } from '../../../shared/api.ts';
 import {
+  DetailList,
   Drawer,
   EmptyState,
   Note,
@@ -21,15 +22,19 @@ import {
   stageName,
   type GateItem,
 } from './board.ts';
+import { tokensLabel, usageDetails } from './usage.ts';
 
 /** The pipeline from above: ten numbered cells, each with its last run. A cell opens that stage's recent runs. */
 export function StageStrip({
   stages,
   now,
+  usageSince,
   waiting,
 }: {
   stages: readonly PipelineStage[];
   now: string;
+  /** Where the stages' usage figures start (the status document's `usageSince`). */
+  usageSince: string;
   /** What waits for you at the stage with the gate: the Board (approve) and the Reviewer (build). */
   waiting: Partial<Record<StageId, GateItem[]>>;
 }) {
@@ -66,6 +71,11 @@ export function StageStrip({
                 <span className="font-mono text-note text-muted tnum">
                   {last ? <time dateTime={last.at}>{ago(last.at, now)}</time> : 'no runs yet'}
                 </span>
+                {stage?.usage ? (
+                  <span className="font-mono text-note text-muted tnum">
+                    {tokensLabel(stage.usage)}
+                  </span>
+                ) : null}
                 {count > 0 ? (
                   <span className="font-mono text-note text-brand tnum">{count} need you</span>
                 ) : null}
@@ -163,6 +173,18 @@ export function StageStrip({
                 body="Runs show here once this stage has worked on something."
               />
             )}
+            {selected.usage ? (
+              <div>
+                <h3 className={labelClass}>Usage since {usageSince.slice(0, 10)}</h3>
+                <div className="mt-3">
+                  <DetailList items={usageDetails(selected.usage)} />
+                </div>
+                <Note className="mt-3">
+                  Every project together, from the runs that recorded their usage. The API price is
+                  what the same tokens would cost on the API; a subscription doesn&rsquo;t bill it.
+                </Note>
+              </div>
+            ) : null}
             {selected.workflowUrl ? null : (
               <Note>
                 This stage runs in each product's own repository; these are its reports on the idea

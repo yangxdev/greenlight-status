@@ -1,4 +1,4 @@
-import type { CriticRun, StatusResponse } from '../../shared/api.ts';
+import { USAGE_WINDOW_DAYS, type CriticRun, type StatusResponse } from '../../shared/api.ts';
 import type { Env } from '../env.ts';
 import {
   parseCriticTable,
@@ -15,6 +15,7 @@ import {
   type IssueComment,
 } from './project.ts';
 import { buildStages, parseWorkflowRuns } from './runs.ts';
+import { sumUsage } from './usage.ts';
 
 export const DEFAULT_REPO = 'yangxdev/greenlight';
 export const FILED_THRESHOLD = 14;
@@ -121,14 +122,20 @@ export async function buildStatus(
     .sort()
     .reverse()[0];
 
+  const now = new Date();
+  const usageSince = new Date(now.getTime() - USAGE_WINDOW_DAYS * 86_400_000).toISOString();
+  // The Analyst's and Critic's usage sits at the end of each week's review file, even when the Critic failed.
+  const usageTexts: string[] = [];
+
   const [runResults, watchText, report] = await Promise.all([
     Promise.all(
       criticFiles.map(async (file): Promise<CriticRun | null> => {
         const text = await attempt(() => getText(`${raw}/analysis/${file}`));
         if (text === null) return null;
+        const date = CRITIC_FILE.exec(file)?.[1] ?? '';
+        if (date >= usageSince.slice(0, 10)) usageTexts.push(text);
         const rows = parseCriticTable(text);
         if (rows.length === 0) return null;
-        const date = CRITIC_FILE.exec(file)?.[1] ?? '';
         return { date, file, url: `${blob}/analysis/${file}`, rows };
       }),
     ),
@@ -158,12 +165,16 @@ export async function buildStatus(
       .map((event) => ({ project: issue, event })),
   );
 
+  // Every trusted comment the board read, not only the ideas': the Observer reports on its own tracking issue.
+  for (const c of comments ?? []) if (c.trusted && c.at >= usageSince) usageTexts.push(c.body);
+
   return {
     sourceRepo: repo,
-    fetchedAt: new Date().toISOString(),
+    fetchedAt: now.toISOString(),
     stale: false,
     filedThreshold: FILED_THRESHOLD,
-    stages: buildStages(parseWorkflowRuns(runsJson), stageEvents, repo),
+    stages: buildStages(parseWorkflowRuns(runsJson), stageEvents, repo, sumUsage(usageTexts)),
+    usageSince,
     projects,
     runs,
     watchlist: watchText === null ? [] : parseWatchlist(watchText),

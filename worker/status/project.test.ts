@@ -298,3 +298,53 @@ describe('attachChanges', () => {
     expect(projects[1]?.changes.map((c) => c.number)).toEqual([11]);
   });
 });
+
+describe('usage', () => {
+  const issue = {
+    number: 4,
+    kind: 'idea' as const,
+    parent: null,
+    name: 'p4',
+    states: ['building' as const],
+    url: '',
+    closed: false,
+    author: 'yangxdev',
+    createdAt: '',
+    updatedAt: '',
+  };
+  const usage = (stage: string, input: number) =>
+    `<!-- greenlight:usage stage=${stage} in=${input} out=10 cache_read=0 cache_write=0 turns=2 cost=0.1 -->`;
+
+  it('adds up each stage over its runs, fix rounds included, and totals the project', () => {
+    const project = summarizeProject(
+      issue,
+      [
+        comment(
+          `**Architect:** ready\n\n**Reviewer:** ready\n\n${usage('architect', 100)}\n${usage('reviewer', 50)}`,
+        ),
+        comment(`**Factory:** PR opened\n\n${usage('factory', 1000)}`),
+        comment(`**Inspector:** round 1 failed\n\n${usage('inspector', 200)}`),
+        comment(`**Factory (fix):** fix round 1 pushed\n\n${usage('factory', 400)}`),
+      ],
+      [],
+      [],
+    );
+    const by = Object.fromEntries(project.steps.map((s) => [s.stage, s.usage]));
+    expect(by.architect).toMatchObject({ input: 100, runs: 1 });
+    expect(by.reviewer).toMatchObject({ input: 50, runs: 1 });
+    expect(by.factory).toMatchObject({ input: 1400, output: 20, turns: 4, runs: 2 });
+    expect(by.board).toBeNull();
+    expect(project.usage).toMatchObject({ input: 1750, runs: 5 });
+  });
+
+  it('ignores markers in comments from people without write access', () => {
+    const project = summarizeProject(
+      issue,
+      [comment(`**Factory:** hi\n${usage('factory', 9)}`, { trusted: false, author: 'someone' })],
+      [],
+      [],
+    );
+    expect(project.steps.every((s) => s.usage === null)).toBe(true);
+    expect(project.usage).toBeNull();
+  });
+});

@@ -43,6 +43,27 @@ const READY = makeDetail({
 });
 
 describe('Project', () => {
+  it('shows what each stage used, and the project total on the Stages pane', async () => {
+    const usage = {
+      input: 120_000,
+      output: 45_000,
+      cacheRead: 3_900_000,
+      cacheWrite: 210_000,
+      turns: 80,
+      costUsd: 4.1235,
+      runs: 2,
+    };
+    const steps = makeSteps(7, 'running').map((s) => (s.stage === 'factory' ? { ...s, usage } : s));
+    mockApi({ '/api/projects/5': makeDetail({ steps, usage }), '/api/status': makeStatus() });
+    renderProject(VISITOR);
+    const stages = await screen.findByRole('region', { name: 'Stages' });
+    expect(within(stages).getByText('4.3M tokens')).toBeInTheDocument();
+    expect(
+      within(stages).getByText('4.3M tokens · 3.9M from cache · 2 runs · $4.12 at API prices'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/a subscription doesn.t bill it/)).toBeInTheDocument();
+  });
+
   it("shows each stage's reports, the idea, and the discussion as plain text", async () => {
     mockApi({ '/api/projects/5': READY, '/api/status': makeStatus() });
     renderProject(VISITOR);

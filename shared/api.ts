@@ -49,10 +49,32 @@ export interface StageRun {
   url: string;
 }
 
+/**
+ * What Claude used, added up over one or more runs. Each AI job of the pipeline records its run in a
+ * `<!-- greenlight:usage stage=… in=… out=… cache_read=… cache_write=… turns=… cost=… -->` marker on the comment
+ * (or, for the Analyst and Critic, the review file) that reports it. Runs from before the markers have none.
+ */
+export interface TokenUsage {
+  /** Input tokens read fresh, not from the prompt cache. */
+  input: number;
+  output: number;
+  /** Input tokens read back from the prompt cache. */
+  cacheRead: number;
+  /** Input tokens written to the prompt cache. */
+  cacheWrite: number;
+  turns: number;
+  /** What the same tokens would cost on the API, in US dollars. A subscription doesn't bill this; it shows weight. */
+  costUsd: number;
+  /** How many Claude runs these figures add up. */
+  runs: number;
+}
+
 export interface PipelineStage {
   id: StageId;
   /** Newest first, at most 8. Runs a workflow skipped (label events it ignores) are left out. */
   runs: StageRun[];
+  /** What the stage's Claude runs used since the status document's `usageSince`, across every project. */
+  usage: TokenUsage | null;
   /** The workflow's page on GitHub, or null for the stages that run in product repos. */
   workflowUrl: string | null;
 }
@@ -68,6 +90,8 @@ export interface ProjectStep {
   status: StepStatus;
   /** When the stage last reported, if it did. */
   at: string | null;
+  /** What this stage's Claude runs used for this project, retries and fix rounds included. */
+  usage: TokenUsage | null;
 }
 
 /** What the owner is needed for: the two gates, or a stuck project. */
@@ -120,6 +144,8 @@ export interface ProjectSummary {
   score: { total: number; date: string; url: string } | null;
   /** For an idea: its changes, open ones first, newest first. Empty for a change. */
   changes: ChangeSummary[];
+  /** Every stage's usage for this issue added up (a product's changes count on their own issues). */
+  usage: TokenUsage | null;
 }
 
 export interface CriticRow {
@@ -143,6 +169,9 @@ export interface CriticRun {
   rows: CriticRow[];
 }
 
+/** How far back the stage strip's usage figures reach. */
+export const USAGE_WINDOW_DAYS = 30;
+
 export interface WatchEntry {
   name: string;
   bestScore: number | null;
@@ -160,6 +189,8 @@ export interface StatusResponse {
   filedThreshold: number;
   /** Ten entries, in STAGES order. */
   stages: PipelineStage[];
+  /** ISO 8601: the start of the stages' usage window (USAGE_WINDOW_DAYS before fetchedAt). */
+  usageSince: string;
   /** Ideas only, newest issue first; each carries its changes. */
   projects: ProjectSummary[];
   /** Critic runs, newest first; runs without a valid table are omitted. */

@@ -31,6 +31,11 @@ A dashboard of the Greenlight pipeline: every project and the stage it is at, wh
 - **A project** (`/p/<issue>`): each stage's reports from the issue (the Architect's tasks, the Reviewer's notes,
   the Factory's pull requests, the Inspector's verdict, the live link), the idea as written, the product repo's
   pull requests and runs, and the discussion.
+- **Tokens:** what Claude used, from the `greenlight:usage` marker each AI job of the pipeline adds to its report.
+  Each stage cell shows its total over the last 30 days, across every project, and opens the breakdown (fresh
+  input, cache reads and writes, output, runs, and what the same tokens would cost on the API). A tile shows its
+  project's total; a project page shows each stage's, fix rounds included. Runs from before the markers aren't
+  counted.
 - **Changes:** a live product's changes (sub-issues of its idea issue) are listed on its page and open their own page
   with the same stages. A change waiting for you shows on its product's tile.
 - **Ideas:** every card the Critic scored, newest run first, and the watchlist of near misses.

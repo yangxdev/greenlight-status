@@ -3,7 +3,9 @@ import {
   type PipelineStage,
   type ProjectEvent,
   type RunStatus,
+  type StageId,
   type StageRun,
+  type TokenUsage,
 } from '../../shared/api.ts';
 import { eventStatus } from './project.ts';
 
@@ -64,11 +66,13 @@ export function buildStages(
   runs: WorkflowRun[],
   events: { project: { number: number; name: string }; event: ProjectEvent }[],
   repo: string,
+  usage: ReadonlyMap<StageId, TokenUsage> = new Map(),
 ): PipelineStage[] {
   return STAGES.map(({ id, workflow }) => {
     if (workflow) {
       return {
         id,
+        usage: usage.get(id) ?? null,
         workflowUrl: `https://github.com/${repo}/actions/workflows/${workflow}`,
         runs: runs
           .filter((r) => r.workflow === workflow)
@@ -78,6 +82,7 @@ export function buildStages(
     }
     return {
       id,
+      usage: usage.get(id) ?? null,
       workflowUrl: null,
       runs: events
         .filter(({ event }) => event.stage === id)
