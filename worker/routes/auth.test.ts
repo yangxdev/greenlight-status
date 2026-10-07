@@ -222,6 +222,16 @@ describe('writes', () => {
     });
   });
 
+  it('CH7: writes the MVP heading and names it in the required-fields error', () => {
+    const body = ideaBody(IDEA);
+    expect(body).toContain('### MVP\n\n- Upload a glossary');
+    expect(body).not.toContain('MVP in one day');
+    expect(body.match(/^### /gm)).toHaveLength(6);
+    expect(validateIdea({ ...IDEA, mvp: '' })).toEqual({
+      error: 'Problem, target users and the MVP are required.',
+    });
+  });
+
   it('validates the idea before calling GitHub', () => {
     expect(validateIdea({ ...IDEA, title: '' })).toEqual({ error: 'Give the idea a name.' });
     expect('error' in validateIdea({ ...IDEA, mvp: ' ' })).toBe(true);

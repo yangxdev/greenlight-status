@@ -56,6 +56,17 @@ describe('parseIdeaIssues', () => {
     ]);
     expect(parseIdeaIssues('nope', 'o/r')).toEqual([]);
   });
+
+  it('CH6: ignores an open [note] issue, even with the note label', () => {
+    const note = {
+      number: 9,
+      title: '[note] Bike shops',
+      state: 'open',
+      labels: [{ name: 'note' }],
+      html_url: 'https://github.com/o/r/issues/9',
+    };
+    expect(parseIdeaIssues([note], 'o/r')).toEqual([]);
+  });
 });
 
 describe('parseWatchlist', () => {
