@@ -35,7 +35,7 @@ A dashboard of the Greenlight pipeline: every project and the stage it is at, wh
   with the same stages. A change waiting for you shows on its product's tile.
 - **Ideas:** every card the Critic scored, newest run first, and the watchlist of near misses.
 - **For the owner, signed in with GitHub:** write a new idea in a form (the same fields as GitHub's Idea form, with
-  the repo name it will get, and "approve it now"), request a change to a live product, approve an idea or a change,
+  the repo name it will get, and "approve it now"), jot a quick note (an idea or a piece of evidence), request a change to a live product, approve an idea or a change,
   start a build, redo a blueprint, retry a stuck project, archive one, and comment feedback for the Architect.
 
 ## How to use it
@@ -44,6 +44,8 @@ A dashboard of the Greenlight pipeline: every project and the stage it is at, wh
 2. Open a tile to see what each stage did. Signed in, the button at the top is the next gate: **Approve**,
    **Start the build** or **Retry**.
 3. **New idea** files an issue as you. Tick **Approve it now** to start the Architect straight away.
+4. **Quick note** files a short note as you, either an Idea or Evidence, with optional links. It is titled `[note] …`
+   and stays off the pipeline until the Scribe turns it into an idea card or field notes, about a minute later.
 
 Everyone can read the dashboard. Only the owner of the pipeline repo (`SOURCE_REPO`) can sign in; anyone else is
 turned away at the callback and their token is dropped. Only the 100 newest issues and the 300 newest comments of the
