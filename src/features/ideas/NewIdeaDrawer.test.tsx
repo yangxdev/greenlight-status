@@ -24,6 +24,15 @@ describe('NewIdeaDrawer', () => {
     expect(repoSlug('a'.repeat(50))).toHaveLength(40);
   });
 
+  it('CH14: labels the field MVP with its hint, and never says "MVP in one day"', () => {
+    renderDrawer();
+    expect(screen.getByLabelText('MVP')).toBeInTheDocument();
+    expect(
+      screen.getByText('The smallest first version that proves the value'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/MVP in one day/)).not.toBeInTheDocument();
+  });
+
   it('points at the missing required fields instead of sending', async () => {
     const user = userEvent.setup();
     const { sent } = mockApi({});
@@ -50,7 +59,7 @@ describe('NewIdeaDrawer', () => {
     expect(screen.getByText('Becomes the product repo: glossary-guard')).toBeInTheDocument();
     await user.type(screen.getByLabelText('Problem'), 'Translators mix up glossaries.');
     await user.type(screen.getByLabelText('Target users'), 'Freelance translators');
-    await user.type(screen.getByLabelText('MVP in one day'), '- Upload a glossary');
+    await user.type(screen.getByLabelText('MVP'), '- Upload a glossary');
     await user.click(screen.getByRole('checkbox', { name: /Approve it now/ }));
     await user.click(screen.getByRole('button', { name: 'File and approve' }));
     expect(await screen.findByText('project page')).toBeInTheDocument();

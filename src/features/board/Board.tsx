@@ -6,6 +6,7 @@ import { ViewHeader } from '../../components/shell/index.ts';
 import { Button, EmptyState, Note, Segmented, inputClass } from '../../components/ui/index.ts';
 import { cn } from '../../lib/cn.ts';
 import { NewIdeaDrawer } from '../ideas/NewIdeaDrawer.tsx';
+import { QuickNoteDrawer } from '../ideas/QuickNoteDrawer.tsx';
 import { selectMe } from '../session/sessionSlice.ts';
 import { StaleNote, StatusGate, Updated } from '../status/StatusGate.tsx';
 import {
@@ -25,7 +26,15 @@ const SIGN_IN_NOTES: Record<string, string> = {
   failed: 'GitHub sign-in did not finish. Try again.',
 };
 
-function BoardView({ data, onNewIdea }: { data: StatusResponse; onNewIdea?: () => void }) {
+function BoardView({
+  data,
+  onNewIdea,
+  onQuickNote,
+}: {
+  data: StatusResponse;
+  onNewIdea?: () => void;
+  onQuickNote?: () => void;
+}) {
   const [filter, setFilter] = useState<Filter>('active');
   const [query, setQuery] = useState('');
   const [params] = useSearchParams();
@@ -56,9 +65,16 @@ function BoardView({ data, onNewIdea }: { data: StatusResponse; onNewIdea?: () =
         }
         actions={
           onNewIdea ? (
-            <Button variant="primary" size="sm" onClick={onNewIdea}>
-              New idea
-            </Button>
+            <>
+              {onQuickNote ? (
+                <Button variant="ghost" size="sm" onClick={onQuickNote}>
+                  Quick note
+                </Button>
+              ) : null}
+              <Button variant="primary" size="sm" onClick={onNewIdea}>
+                New idea
+              </Button>
+            </>
           ) : undefined
         }
       />
@@ -135,14 +151,24 @@ function BoardView({ data, onNewIdea }: { data: StatusResponse; onNewIdea?: () =
 export default function Board() {
   const me = useAppSelector(selectMe);
   const [drawer, setDrawer] = useState(false);
+  const [noteDrawer, setNoteDrawer] = useState(false);
   return (
     <>
       <StatusGate>
         {(data) => (
-          <BoardView data={data} onNewIdea={me.owner ? () => setDrawer(true) : undefined} />
+          <BoardView
+            data={data}
+            onNewIdea={me.owner ? () => setDrawer(true) : undefined}
+            onQuickNote={me.owner ? () => setNoteDrawer(true) : undefined}
+          />
         )}
       </StatusGate>
-      {me.owner ? <NewIdeaDrawer open={drawer} onClose={() => setDrawer(false)} /> : null}
+      {me.owner ? (
+        <>
+          <NewIdeaDrawer open={drawer} onClose={() => setDrawer(false)} />
+          <QuickNoteDrawer open={noteDrawer} onClose={() => setNoteDrawer(false)} />
+        </>
+      ) : null}
     </>
   );
 }

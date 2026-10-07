@@ -125,6 +125,18 @@ describe('Board', () => {
     expect(screen.getByRole('button', { name: 'New idea' })).toBeInTheDocument();
   });
 
+  it('CH13: offers "Quick note" beside "New idea" to the owner only, and opens its drawer', async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderBoard(makeStatus(), VISITOR);
+    expect(screen.queryByRole('button', { name: 'Quick note' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Jot it down' })).not.toBeInTheDocument();
+    unmount();
+    renderBoard(makeStatus(), OWNER);
+    expect(screen.getByRole('button', { name: 'New idea' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Quick note' }));
+    expect(screen.getByRole('dialog', { name: 'Jot it down' })).toBeInTheDocument();
+  });
+
   it('explains a refused sign-in, and the stale copy', () => {
     renderBoard(makeStatus({ stale: true }), VISITOR, '/?signin=denied');
     expect(screen.getByText(/Only the pipeline’s owner can sign in/)).toBeInTheDocument();
