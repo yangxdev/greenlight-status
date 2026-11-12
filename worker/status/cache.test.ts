@@ -1,8 +1,15 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StatusResponse } from '../../shared/api.ts';
 import type { Env } from '../env.ts';
-import { CACHE_MS, getProject, getStatus, invalidate, resetStatusCache } from './cache.ts';
+import {
+  CACHE_MS,
+  getProject,
+  getStatus,
+  invalidate,
+  resetStatusCache,
+  SHARED_WAIT_MS,
+} from './cache.ts';
 import { API, baseRoutes, fakeGithub, json } from './fixtures.ts';
 
 const env = {} as Env;
@@ -11,6 +18,21 @@ const START = Date.parse('2026-10-03T10:00:00Z');
 beforeEach(() => resetStatusCache());
 
 describe('getStatus', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('rebuilds itself when a rebuild another request started never settles', async () => {
+    vi.useFakeTimers();
+    // Workers drop a request's I/O when that request ends; its rebuild then hangs like this one.
+    const dead = () => new Promise<Response>(() => {});
+    void getStatus(env, () => START, dead);
+    const { fetchImpl } = fakeGithub(baseRoutes());
+    const pending = getStatus(env, () => START, fetchImpl);
+    await vi.advanceTimersByTimeAsync(SHARED_WAIT_MS);
+    const res = await pending;
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as StatusResponse).projects).toHaveLength(1);
+  });
+
   it('AC12: serves the second call inside the cache window from memory', async () => {
     const { fetchImpl, calls } = fakeGithub(baseRoutes());
     const first = await getStatus(env, () => START, fetchImpl);

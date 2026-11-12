@@ -7,15 +7,30 @@ export class ApiError extends Error {
   }
 }
 
+/** A request that hasn't answered by now fails, so a screen shows its error and retry instead of loading forever. */
+export const REQUEST_TIMEOUT_MS = 30_000;
+const TIMED_OUT = 'The server took too long to answer. Try again.';
+
 async function send<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`/api${path}`, {
-    method,
-    headers: {
-      accept: 'application/json',
-      ...(body === undefined ? null : { 'content-type': 'application/json' }),
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, {
+      method,
+      headers: {
+        accept: 'application/json',
+        ...(body === undefined ? null : { 'content-type': 'application/json' }),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (controller.signal.aborted) throw new ApiError(0, TIMED_OUT);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) {
     let message = `${method} /api${path} failed: ${res.status}`;
     try {
