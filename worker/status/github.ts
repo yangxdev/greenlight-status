@@ -18,7 +18,10 @@ import { buildStages, parseWorkflowRuns } from './runs.ts';
 import { sumUsage } from './usage.ts';
 
 export const DEFAULT_REPO = 'yangxdev/greenlight';
-export const FILED_THRESHOLD = 14;
+/** Greenlight's default CRITIC_MIN_SCORE since November 2026 (it was 14). */
+export const FILED_THRESHOLD = 12;
+/** Each GitHub call gives up after this long, so a rebuild always settles. A normal one takes about 2.5 s in all. */
+export const GITHUB_TIMEOUT_MS = 10_000;
 const MAX_CRITIC_FILES = 12;
 /** Pages of 100 of the repo's newest comments: enough for every recent project's stage comments. */
 export const COMMENT_PAGES = 3;
@@ -54,7 +57,7 @@ export function githubReader(
     if (env.GITHUB_READ_TOKEN && new URL(url).hostname === 'api.github.com') {
       headers.authorization = `Bearer ${env.GITHUB_READ_TOKEN}`;
     }
-    return fetchImpl(url, { headers });
+    return fetchImpl(url, { headers, signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS) });
   };
   const getJson = async (url: string): Promise<unknown> => {
     const res = await request(url);
